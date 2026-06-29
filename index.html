@@ -841,7 +841,22 @@ window.showDua=showDua;
       </div>
     </div></div>
   </div>
-  <div class="modal-footer"><button class="btn btn-outline" onclick="clearForm('settingsModal')"><i class="fas fa-eraser"></i> Clear</button><button class="btn btn-outline" onclick="saveDraft('settingsModal')"><i class="fas fa-save"></i> Save Draft</button><button class="btn btn-outline" onclick="closeModal('settingsModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> <span data-i18n="save"></span></button></div>
+  
+    <!-- Certificate Settings -->
+    <div class="settings-card">
+      <h4 class="settings-section-title"><i class="fas fa-graduation-cap"></i> Certificate & Grading</h4>
+      <div class="form-group">
+        <label class="form-label">Required Assignments for Certificate</label>
+        <input type="number" class="form-input" id="setCertRequired" value="4" min="1" max="20" placeholder="4">
+        <div class="form-help">Number of assignments student must complete</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Minimum Pass Percentage (%)</label>
+        <input type="number" class="form-input" id="setCertPass" value="60" min="1" max="100" placeholder="60">
+        <div class="form-help">Average score needed to earn a certificate</div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="clearForm('settingsModal')"><i class="fas fa-eraser"></i> Clear</button><button class="btn btn-outline" onclick="saveDraft('settingsModal')"><i class="fas fa-save"></i> Save Draft</button><button class="btn btn-outline" onclick="closeModal('settingsModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> <span data-i18n="save"></span></button></div>
 </div></div>
 <!-- AUDIT LOG MODAL -->
 <div id="auditLogModal" class="modal-overlay"><div class="modal-content">
@@ -2612,7 +2627,29 @@ function autoCloseAssignments(){
   }catch(e){console.warn('autoClose:',e.message);}
 }
 
-function getTeacherName(teacherId){if(!teacherId)return'Not Assigned';var t=DB.users.find(function(u){return u.id===teacherId});return t?t.name:'Not Assigned'}
+function getTeacherName(teacherId){
+  // First try direct ID lookup
+  if(teacherId){
+    var t=DB.users.find(function(u){return u.id===teacherId;});
+    if(t)return t.name;
+  }
+  // Fallback: find teacher by current user's class group
+  var me=DB.currentUser;
+  if(me&&me.classGroup){
+    var byGroup=DB.users.find(function(u){
+      return u.role==='Teacher'&&u.status==='Approved'&&u.classGroup===me.classGroup;
+    });
+    if(byGroup){
+      // Auto-update student's teacher field silently
+      if(me&&!me.teacher){me.teacher=byGroup.id;fbSaveRecord('users',me,null,null);}
+      return byGroup.name;
+    }
+    // Try any approved teacher
+    var anyTeacher=DB.users.find(function(u){return u.role==='Teacher'&&u.status==='Approved';});
+    if(anyTeacher)return anyTeacher.name;
+  }
+  return t('notAssigned')||'Not Assigned';
+}
 
 
 function getStudentCount(){return DB.users.filter(function(u){return u.role==="Student"}).length}
@@ -3802,15 +3839,175 @@ async function autoTranslateAssignmentQuestions(a,callback){
   callback();
 }function openSubmitAssignment(assId){var a=DB.assignments.find(function(x){return x.id===assId});if(!a)return;
   if(a.closeDate&&new Date()>new Date(a.closeDate)){showToast("Submissions closed \u2014 deadline: "+formatDate(a.closeDate),"error");return;}
-  if(a.dueDate&&new Date()>new Date(a.dueDate)){showToast("Past due date \u2014 late submission","warning");}var user=DB.currentUser;if(!a||a.status!=="Active"){showToast(t("assignmentClosed"),"error");return}if(isClosed(a.closeDate)){showToast(t("assignmentClosed"),"error");return}var maxAtt2=a.maxAttempts||3;var attCount=DB.submissions.filter(function(s){return s.studentId===user.id&&s.assignmentId===assId}).length;if(attCount>=maxAtt2){showToast(t("maxAttemptsReached")+" ("+maxAtt2+")","error");return}currentSubmissionAssId=assId;currentSubmissionAnswers=[];autoTranslateAssignmentQuestions(a,function(){$("submitAssTitle").innerHTML='<i class="fas fa-edit"></i> '+esc(a.title);var html='';html+='<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.8rem"><strong>'+t("marks")+':</strong> '+a.marks+' | <strong>'+t("due")+':</strong> '+formatDateTime(a.closeDate)+'</div>';var lang=currentLang||'en';if(a.questions&&a.questions.length>0){a.questions.forEach(function(q,qi){currentSubmissionAnswers.push({questionId:q.id,answer:""});var qTextEn=q.textEn||q.text||'';var qTextTa=q.textTa||'';var qTextSi=q.textSi||'';var qText=lang==='ta'&&qTextTa?qTextTa:(lang==='si'&&qTextSi?qTextSi:qTextEn);html+='<div style="margin-bottom:16px;padding:14px;background:var(--bg);border-radius:var(--radius-sm)">';html+='<div style="font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start"><div><span style="color:var(--primary)">Q'+(qi+1)+'.</span> '+esc(qText)+' <span style="color:var(--accent);font-size:0.7rem">['+t(q.type)+']</span></div></div>';if(q.type==="mcq"&&q.options&&q.options.length>0){html+='<div class="answer-mcq">';var dispOpts=lang==='ta'&&q.optionsTa&&q.optionsTa.length?q.optionsTa:(lang==='si'&&q.optionsSi&&q.optionsSi.length?q.optionsSi:q.options);
+  if(a.dueDate&&new Date()>new Date(a.dueDate)){showToast("Past due date \u2014 late submission","warning");}var user=DB.currentUser;if(!a||a.status!=="Active"){showToast(t("assignmentClosed"),"error");return}if(isClosed(a.closeDate)){showToast(t("assignmentClosed"),"error");return}var maxAtt2=a.maxAttempts||3;var attCount=DB.submissions.filter(function(s){return s.studentId===user.id&&s.assignmentId===assId}).length;if(attCount>=maxAtt2){showToast(t("maxAttemptsReached")+" ("+maxAtt2+")","error");return}currentSubmissionAssId=assId;currentSubmissionAnswers=[];autoTranslateAssignmentQuestions(a,function(){$("submitAssTitle").innerHTML='<i class="fas fa-edit"></i> '+esc(a.title);var html='';html+='<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.8rem"><strong>'+t("marks")+':</strong> '+a.marks+' | <strong>'+t("due")+':</strong> '+formatDateTime(a.closeDate)+'</div>';
+  // Show attachment as thumbnail if present
+  if(a.attachment&&a.attachment.url){
+    var att=a.attachment;
+    var isImage=att.type&&att.type.startsWith('image');
+    if(isImage){
+      html+='<div style="margin-bottom:12px"><div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--primary)"><i class="fas fa-paperclip"></i> Attachment</div>';
+      html+='<img src="'+att.url+'" alt="attachment" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="viewFullImage(\''+att.url+'\')"></div>';
+    } else {
+      html+='<div style="margin-bottom:12px"><a href="'+att.url+'" target="_blank" class="btn btn-outline btn-sm"><i class="fas fa-file-download"></i> '+esc(att.name||'Attachment')+'</a></div>';
+    }
+  } else if(a.attachmentData){
+    var isImg=a.attachmentData.startsWith('data:image');
+    if(isImg){
+      html+='<div style="margin-bottom:12px"><div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--primary)"><i class="fas fa-paperclip"></i> Attachment</div>';
+      html+='<img src="'+a.attachmentData+'" alt="attachment" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="viewFullImage(this.src)"></div>';
+    }
+  }var lang=currentLang||'en';if(a.questions&&a.questions.length>0){a.questions.forEach(function(q,qi){currentSubmissionAnswers.push({questionId:q.id,answer:""});var qTextEn=q.textEn||q.text||'';var qTextTa=q.textTa||'';var qTextSi=q.textSi||'';var qText=lang==='ta'&&qTextTa?qTextTa:(lang==='si'&&qTextSi?qTextSi:qTextEn);html+='<div style="margin-bottom:16px;padding:14px;background:var(--bg);border-radius:var(--radius-sm)">';html+='<div style="font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start"><div><span style="color:var(--primary)">Q'+(qi+1)+'.</span> '+esc(qText)+' <span style="color:var(--accent);font-size:0.7rem">['+t(q.type)+']</span></div></div>';if(q.type==="mcq"&&q.options&&q.options.length>0){html+='<div class="answer-mcq">';var dispOpts=lang==='ta'&&q.optionsTa&&q.optionsTa.length?q.optionsTa:(lang==='si'&&q.optionsSi&&q.optionsSi.length?q.optionsSi:q.options);
 (dispOpts||q.options||[]).forEach(function(opt,oi){html+='<label class="answer-option"><input type="radio" name="q_'+q.id+'" value="'+oi+'" onchange="updateAnswer(\''+q.id+'\','+oi+')"> <span>'+String.fromCharCode(65+oi)+'. '+esc(opt)+'</span></label>'});html+='</div>'}else if(q.type==="truefalse"){html+='<div class="answer-mcq">';html+='<label class="answer-option"><input type="radio" name="q_'+q.id+'" value="0" onchange="updateAnswer(\''+q.id+'\',0)"> <span>'+t("true")+'</span></label>';html+='<label class="answer-option"><input type="radio" name="q_'+q.id+'" value="1" onchange="updateAnswer(\''+q.id+'\',1)"> <span>'+t("false")+'</span></label>';html+='</div>'}else{html+='<textarea class="answer-textarea" id="ans_'+q.id+'" placeholder="'+t("typeYourAnswer")+'..." oninput="updateAnswer(\''+q.id+'\',this.value)"></textarea>'}html+='</div>'})}else{html+='<div class="empty-state"><i class="fas fa-question-circle"></i><h4>'+t("noQuestionsYet")+'</h4></div>'}$("submitAssBody").innerHTML=html;openModal("submitAssModal")})}
 function updateAnswer(qid,val){var ans=currentSubmissionAnswers.find(function(a){return a.questionId===qid});if(ans)ans.answer=val}
+function viewFullImage(src){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick=function(){ov.remove();};
+  var img=document.createElement('img');
+  img.src=src;
+  img.style.cssText='max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px;';
+  ov.appendChild(img);
+  document.body.appendChild(ov);
+}
+
+function checkCertificateEligibility(studentId){
+  var student=DB.users.find(function(u){return u.id===studentId;});
+  if(!student||student.role!=='Student')return;
+  
+  var settings=DB.settings||{};
+  var requiredCount=parseInt(settings.certRequiredAssignments)||4;
+  var passPercent=parseInt(settings.certPassPercent)||60;
+  
+  // Get all assignments visible to this student's class group
+  var eligibleAssignments=(DB.assignments||[]).filter(function(a){
+    return a.status==='Active'||a.status==='Closed'||a.status==='Auto-Graded';
+  }).filter(function(a){
+    return !a.classGroup||a.classGroup==='All'||a.classGroup===student.classGroup;
+  });
+  
+  if(eligibleAssignments.length<requiredCount){return;} // Not enough assignments yet
+  
+  // Get student's best submission for each assignment
+  var completedAssignments=[];
+  eligibleAssignments.forEach(function(a){
+    var subs=(DB.submissions||[]).filter(function(s){
+      return s.studentId===studentId&&s.assignmentId===a.id&&
+             (s.status==='Auto-Graded'||s.status==='Graded'||s.status==='Submitted');
+    });
+    if(subs.length>0){
+      // Use best attempt
+      var best=subs.reduce(function(prev,cur){return (cur.marks||0)>(prev.marks||0)?cur:prev;});
+      completedAssignments.push({assignment:a,submission:best});
+    }
+  });
+  
+  if(completedAssignments.length<requiredCount){return;} // Not enough submitted
+  
+  // Check if cert already exists for this student
+  var existingCert=(DB.certificates||[]).find(function(c){
+    return c.studentId===studentId&&(c.status==='Pending'||c.status==='Approved');
+  });
+  if(existingCert){return;} // Already has a cert
+  
+  // Calculate average score percentage
+  var totalPercent=0;
+  completedAssignments.slice(0,requiredCount).forEach(function(item){
+    var sub=item.submission;
+    var total=sub.totalMarks||item.assignment.marks||item.assignment.totalMarks||100;
+    totalPercent+=total>0?((sub.marks||0)/total)*100:0;
+  });
+  var avgPercent=Math.round(totalPercent/requiredCount);
+  
+  // Determine grade
+  var grade='F';
+  if(avgPercent>=90)grade='A+';
+  else if(avgPercent>=80)grade='A';
+  else if(avgPercent>=70)grade='B';
+  else if(avgPercent>=60)grade='C';
+  else if(avgPercent>=50)grade='D';
+  
+  var passed=avgPercent>=passPercent;
+  
+  if(!passed){
+    // Notify student of fail
+    var failMsg='You completed '+requiredCount+' assignments with an average of '+avgPercent+'%. Pass mark is '+passPercent+'%. Certificate not awarded.';
+    pushNotification('Assessment Complete',failMsg,'assignment','assignments',[studentId]);
+    addAudit('CERT_FAIL',student.name+' did not meet pass mark ('+avgPercent+'% < '+passPercent+'%)');
+    return;
+  }
+  
+  // Generate certificate
+  var cert={
+    id:generateId('CERT'),
+    studentId:studentId,
+    studentName:student.name,
+    classGroup:student.classGroup||'',
+    teacherName:getTeacherName(student.teacher),
+    averageScore:avgPercent,
+    grade:grade,
+    assignmentsCompleted:requiredCount,
+    status:'Pending',
+    requestDate:new Date().toISOString().slice(0,10),
+    issuedDate:'',
+    details:'Completed '+requiredCount+' assignments with average score of '+avgPercent+'% (Grade: '+grade+')',
+    autoGenerated:true,
+  };
+  
+  if(!DB.certificates)DB.certificates=[];
+  DB.certificates.push(cert);
+  fbSaveRecord('certificates',cert,null,null);
+  
+  // Notify student
+  pushNotification(
+    '🎓 Certificate Ready for Approval',
+    'Congratulations '+student.name+'! You completed all required assignments with '+avgPercent+'% average (Grade: '+grade+'). Your certificate has been sent for admin approval.',
+    'certificate','certificates',[studentId]
+  );
+  
+  // Notify admins
+  var admins=(DB.users||[]).filter(function(u){return u.role==='Admin';}).map(function(u){return u.id;});
+  if(admins.length){
+    pushNotification(
+      'New Certificate Pending',
+      student.name+' has completed all assignments (avg '+avgPercent+'%, Grade: '+grade+') and a certificate is pending your approval.',
+      'certificate','certificates',admins
+    );
+  }
+  
+  addAudit('CERT_GENERATED',student.name+' earned certificate ('+avgPercent+'%, Grade: '+grade+')');
+  showToast('🎓 Certificate generated for '+student.name+'! Awaiting admin approval.','success');
+}
+
+function pushNotification(title,body,type,page,userIds){
+  if(!userIds||!userIds.length)return;
+  userIds.forEach(function(uid){
+    var notif={
+      id:generateId('N'),recipientId:uid,
+      title:title,body:body,type:type||'info',
+      page:page||'dashboard',read:false,
+      createdAt:new Date().toISOString()
+    };
+    if(!DB.notifications)DB.notifications=[];
+    DB.notifications.push(notif);
+    fbSaveRecord('notifications',notif,null,null);
+  });
+  updateNotifBadge();
+}
+
 function saveSubmission(){
   var a=DB.assignments.find(function(x){return x.id===currentSubmissionAssId;});
   if(!a){showToast('Assignment not found','error');return;}
   var user=DB.currentUser;if(!user)return;
-  var existingSub=(DB.submissions||[]).find(function(s){return s.studentId===user.id&&s.assignmentId===currentSubmissionAssId;});
-  if(existingSub){showToast(t('alreadySubmitted')||'Already submitted','warning');closeModal('submitAssModal');return;}
+  // Count how many times this student has submitted this assignment
+  var prevSubs=(DB.submissions||[]).filter(function(s){
+    return s.studentId===user.id&&s.assignmentId===currentSubmissionAssId;
+  });
+  var maxAtt=parseInt(a.maxAttempts)||1;
+  if(prevSubs.length>=maxAtt){
+    showToast((t('maxAttemptsReached')||'Max attempts reached')+' ('+maxAtt+')','error');
+    closeModal('submitAssModal');return;
+  }
+  // Collect answers
   var finalAnswers=[];var hasAnswer=false;
   if(a.questions&&a.questions.length>0){
     a.questions.forEach(function(q){
@@ -3826,12 +4023,26 @@ function saveSubmission(){
     });
     if(!hasAnswer){showToast(t('fillRequired')||'Please answer at least one question','error');return;}
   }
-  var sub={id:generateId('SUB'),studentId:user.id,studentName:user.name,assignmentId:currentSubmissionAssId,assignmentTitle:a.title,answers:JSON.parse(JSON.stringify(finalAnswers)),marks:0,totalMarks:a.totalMarks||a.marks||100,grade:'-',submittedDate:new Date().toISOString().slice(0,10),submittedAt:new Date().toISOString(),status:'Submitted'};
+  var attemptNum=prevSubs.length+1;
+  var sub={
+    id:generateId('SUB'),
+    studentId:user.id,studentName:user.name,
+    assignmentId:currentSubmissionAssId,assignmentTitle:a.title,
+    answers:JSON.parse(JSON.stringify(finalAnswers)),
+    marks:0,totalMarks:a.totalMarks||a.marks||100,
+    grade:'-',attemptNumber:attemptNum,maxAttempts:maxAtt,
+    submittedDate:new Date().toISOString().slice(0,10),
+    submittedAt:new Date().toISOString(),status:'Submitted'
+  };
   if(!DB.submissions)DB.submissions=[];
   DB.submissions.push(sub);
   autoCorrectSubmission(sub.id,sub);
   fbSaveRecord('submissions',sub,t('submissionReceived')||'Submitted! ✅',null);
-  addAudit('ASSIGNMENT_SUBMIT',user.name+' submitted '+a.title);
+  addAudit('ASSIGNMENT_SUBMIT',user.name+' submitted '+a.title+' (attempt '+attemptNum+')');
+  // After saving, check cert eligibility
+  setTimeout(function(){checkCertificateEligibility(user.id);},500);
+  // Check certificate eligibility after submission
+  setTimeout(function(){try{checkCertificateEligibility(user.id);}catch(ex){console.warn(ex);}},600);
   closeModal('submitAssModal');
   renderAssignments();
 }
@@ -4463,6 +4674,9 @@ function showSettings(){
   } else {
     try{$('logoPreviewWrap').style.display='none';$('setLogoData').value='';}catch(e){}
   }
+  // Load cert settings
+  try{var cr=$('setCertRequired');if(cr)cr.value=s.certRequiredAssignments||4;}catch(e){}
+  try{var cp=$('setCertPass');if(cp)cp.value=s.certPassPercent||60;}catch(e){}
   // Open modal FIRST so DOM elements are visible
   openModal('settingsModal');
   // Then initialise things that need visible DOM (canvases, lists)
@@ -4525,7 +4739,11 @@ function handleVideoUpload(input){var file=input.files[0];if(!file)return;videoB
 function saveVideoRecording(){if(!videoBlob){showToast(t('noRecording'),'warning');return}var reader=new FileReader();reader.onloadend=function(){var vid={id:generateId('VID'),title:'Recording '+formatDate(new Date().toISOString().slice(0,10)),dataUrl:reader.result,size:videoBlob.size,date:new Date().toISOString().slice(0,10),createdBy:DB.currentUser.id};if(!DB.videos)DB.videos=[];DB.videos.push(vid);saveDB();showToast(t('saved'),'success');addAudit('VIDEO_SAVE','Saved video: '+vid.id);closeModal('videoRecorderModal')};reader.readAsDataURL(videoBlob)}
 
 // ===================== AUTO-CORRECTION =====================
-function autoCorrectSubmission(subId,subObj){var sub=subObj||DB.submissions.find(function(s){return s.id===subId});if(!sub)return;var a=DB.assignments.find(function(x){return x.id===sub.assignmentId});if(!a||!a.questions)return;sub.answers.forEach(function(ans){var q=a.questions.find(function(xq){return xq.id===ans.questionId});if(!q)return;if(q.type==='mcq'){var correctIdx=parseInt(q.correct);var studentIdx=parseInt(ans.answer);if(!isNaN(correctIdx)&&!isNaN(studentIdx)&&correctIdx===studentIdx)ans.isCorrect=true;else ans.isCorrect=false}else if(q.type==='truefalse'){var correctVal=q.correctTF!==undefined?q.correctTF:(q.correct===0);var studentVal=parseInt(ans.answer)===0;ans.isCorrect=correctVal===studentVal}else{ans.isCorrect=null}});var correctCount=sub.answers.filter(function(a){return a.isCorrect===true}).length;var totalGradable=a.questions.filter(function(q){return q.type==='mcq'||q.type==='truefalse'}).length;if(totalGradable>0){var autoMarks=Math.round((correctCount/totalGradable)*a.marks);sub.marks=autoMarks;sub.totalMarks=a.marks;if(autoMarks>=a.marks*0.5)sub.grade='P';else sub.grade='F';sub.status='Auto-Graded'}saveDB()}
+function autoCorrectSubmission(subId,subObj){var sub=subObj||DB.submissions.find(function(s){return s.id===subId});if(!sub)return;var a=DB.assignments.find(function(x){return x.id===sub.assignmentId});if(!a||!a.questions)return;sub.answers.forEach(function(ans){var q=a.questions.find(function(xq){return xq.id===ans.questionId});if(!q)return;if(q.type==='mcq'){var correctIdx=parseInt(q.correct);var studentIdx=parseInt(ans.answer);if(!isNaN(correctIdx)&&!isNaN(studentIdx)&&correctIdx===studentIdx)ans.isCorrect=true;else ans.isCorrect=false}else if(q.type==='truefalse'){var correctVal=q.correctTF!==undefined?q.correctTF:(q.correct===0);var studentVal=parseInt(ans.answer)===0;ans.isCorrect=correctVal===studentVal}else{ans.isCorrect=null}});var correctCount=sub.answers.filter(function(a){return a.isCorrect===true}).length;var totalGradable=a.questions.filter(function(q){return q.type==='mcq'||q.type==='truefalse'}).length;if(totalGradable>0){var autoMarks=Math.round((correctCount/totalGradable)*a.marks);sub.marks=autoMarks;sub.totalMarks=a.marks;if(autoMarks>=a.marks*0.5)sub.grade='P';else sub.grade='F';sub.status='Auto-Graded'}saveDB();
+  // Trigger certificate eligibility check after grading
+  if(sub&&sub.studentId){
+    setTimeout(function(){checkCertificateEligibility(sub.studentId);},300);
+  }}
 
 // ===================== CERTIFICATE APPROVAL =====================
 function openEventReports(){var sel=$("reportEventSelect");if(sel){sel.innerHTML='<option value="">-- Select an Event --</option>';DB.events.forEach(function(e){var o=document.createElement("option");o.value=e.id;o.textContent=e.name+" ("+formatDate(e.date)+")";sel.appendChild(o)})}$("eventReportContent").innerHTML='<div style="text-align:center;padding:30px;color:var(--text-light)"><i class="fas fa-chart-bar" style="font-size:2rem;margin-bottom:8px"></i><p>Select an event to view the report</p></div>';openModal("eventReportsModal")}
@@ -4690,7 +4908,14 @@ function bulkPending(){var ids=getSelectedApprovalIds();if(ids.length===0){showT
 function bulkReject(){var ids=getSelectedApprovalIds();if(ids.length===0){showToast('Please select at least one registration','warning');return}ids.forEach(function(id){var u=DB.users.find(function(u){return u.id===id});if(u)u.status='Rejected'});saveDB();showToast(ids.length+' user(s) rejected','success');renderApprovalList('all')}
 function filterApprovals(filter,btn){document.querySelectorAll('.approval-filter').forEach(function(f){f.classList.remove('active')});btn.classList.add('active');renderApprovalList(filter)}
 function openUpdateStatus(userId,defaultStatus){var user=DB.users.find(function(u){return u.id===userId});if(!user)return;$('approvalUserId').value=userId;$('approvalNewStatus').value=defaultStatus;$('approvalRemarks').value=user.remarks||'';openModal('updateStatusModal')}
-function saveApprovalStatus(){var userId=$('approvalUserId').value;var newStatus=$('approvalNewStatus').value;var remarks=$('approvalRemarks').value.trim();var user=DB.users.find(function(u){return u.id===userId});if(!user)return;user.status=newStatus;if(remarks)user.remarks=remarks;saveDB();fbSaveRecord('users',user,null,null);showToast('Status updated: '+user.name+' is now '+newStatus,'success');addAudit('STATUS_UPDATE','Updated '+user.name+' to '+newStatus+(remarks?': '+remarks:''));closeModal('updateStatusModal');renderApprovalList('all')}
+function saveApprovalStatus(){var userId=$('approvalUserId').value;var newStatus=$('approvalNewStatus').value;var remarks=$('approvalRemarks').value.trim();var user=DB.users.find(function(u){return u.id===userId});if(!user)return;user.status=newStatus;if(remarks)user.remarks=remarks;
+  // Auto-assign teacher on approval if not already assigned
+  if(newStatus==='Approved'&&!user.teacher&&user.classGroup){
+    var groupTeacher=DB.users.find(function(u){
+      return u.role==='Teacher'&&u.status==='Approved'&&u.classGroup===user.classGroup;
+    })||DB.users.find(function(u){return u.role==='Teacher'&&u.status==='Approved';});
+    if(groupTeacher){user.teacher=groupTeacher.id;user.teacherName=groupTeacher.name;}
+  }saveDB();fbSaveRecord('users',user,null,null);showToast('Status updated: '+user.name+' is now '+newStatus,'success');addAudit('STATUS_UPDATE','Updated '+user.name+' to '+newStatus+(remarks?': '+remarks:''));closeModal('updateStatusModal');renderApprovalList('all')}
 
 // ===================== ENHANCEMENT 3: ONLINE CLASS LIVE FEATURE =====================
 function toggleClassLive(classId){var oc=DB.onlineClasses.find(function(c){return c.id===classId});if(!oc)return;oc.isLive=!oc.isLive;saveDB();showToast(oc.isLive?'Class is now LIVE':'Class live ended','success');renderOnlineClasses()}
