@@ -127,7 +127,8 @@ html{overflow-x:hidden}body{font-family:'Segoe UI',system-ui,sans-serif;backgrou
 .btn-outline{background:transparent;color:var(--primary);border:1.5px solid var(--primary)}
 .btn-sm{padding:6px 12px;font-size:0.75rem}.btn-block{width:100%}.btn-icon{width:32px;height:32px;padding:0;border-radius:50%}
 .form-group{margin-bottom:14px}.form-label{display:block;font-size:0.8rem;font-weight:600;margin-bottom:5px}.form-label .req{color:var(--danger)}
-.form-input,.form-select,.form-textarea{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.9rem;background:var(--card-bg);color:var(--text);-webkit-appearance:none}
+.form-input,.form-textarea{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.9rem;background:var(--card-bg);color:var(--text);}
+.form-select{width:100%;padding:12px 36px 12px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.9rem;background:var(--card-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E") no-repeat right 14px center;-webkit-appearance:none;-moz-appearance:none;appearance:none;cursor:pointer;}
 .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(9,89,150,0.1)}
 .form-textarea{min-height:80px;resize:vertical}
 .checkbox-group{display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;font-size:0.85rem}
@@ -335,7 +336,7 @@ html{overflow-x:hidden}body{font-family:'Segoe UI',system-ui,sans-serif;backgrou
 /* Searchable Dropdown */
 .search-dropdown{position:relative}
 .search-dropdown-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:0.9rem;background:var(--card-bg);margin-bottom:4px}
-.search-dropdown-list{max-height:200px;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card-bg);position:absolute;width:100%;z-index:10;box-shadow:var(--shadow)}
+.search-dropdown-list{max-height:120px;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--card-bg);position:absolute;width:100%;z-index:10;box-shadow:var(--shadow)}
 .search-dropdown-item{padding:10px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--border-light);transition:var(--transition)}
 .search-dropdown-item:hover{background:var(--primary);color:white}
 .search-dropdown-item.selected{background:var(--primary-light);color:var(--primary);font-weight:600}
@@ -479,7 +480,8 @@ window.showDua=showDua;
           <span>I declare that the information provided is accurate to the best of my knowledge, and I authorize its use for registration processing on JDC-LMS for educational purposes.</span>
         </label>
       </div>
-      <button class="btn btn-primary btn-block" onclick="doRegister()"><i class="fas fa-user-plus"></i> <span data-i18n="register"></span></button>
+      <div id="regStatusMsg" style="display:none;margin-bottom:10px;padding:10px;border-radius:8px;font-size:0.85rem;text-align:center"></div>
+      <button id="regSubmitBtn" class="btn btn-primary btn-block" onclick="doRegister()"><i class="fas fa-user-plus"></i> <span data-i18n="register"></span></button>
     </div>
   </div>
   <div class="pwa-install-banner" id="pwaBanner">
@@ -1478,7 +1480,13 @@ en:{
     updateStatus:"Update Status",
     uploadVideo:"Upload Video",
     viewFeedback:"View Feedback",
-    yourName:"Your Name"},
+    yourName:"Your Name",
+    registrationSubmitted:"Registration submitted! Awaiting admin approval.",
+    registrationFailed:"Registration failed. Please try again.",
+    mobileAlreadyExists:"This mobile number is already registered. Please login instead.",
+    emailAlreadyExists:"This email is already registered.",
+    networkError:"Network error. Please check your connection and try again.",
+    classGroupRequired:"Please select a Class Group."},
 ta:{
     login:"உள்நுழைய",
     register:"பதிவு செய்ய",
@@ -2198,7 +2206,7 @@ var FB_COLLECTIONS={users:'users',weeklyDua:'weeklyDua',duaSubmissions:'duaSubmi
 
 function waitForFirebase(cb){if(window._firebaseReady){isFirebaseReady=true;cb();}else{window._onFirebaseReady=function(){isFirebaseReady=true;cb();};}}
 
-async function fbSet(col,record){if(!isFirebaseReady||!window._firebase||!record||!record.id)return false;try{var clean=JSON.parse(JSON.stringify(record));if(clean.photo&&clean.photo.length>600000)clean.photo='';if(clean.logoData&&clean.logoData.length>600000)clean.logoData='';await window._firebase.setDoc(window._firebase.doc(col,clean.id),clean);return true;}catch(e){console.error('fbSet',col,e);return false;}}
+async function fbSet(col,record){if(!window._firebase||!record||!record.id)return false;if(window._firebaseReady)isFirebaseReady=true;try{var clean=JSON.parse(JSON.stringify(record));if(clean.photo&&clean.photo.length>600000)clean.photo='';if(clean.logoData&&clean.logoData.length>600000)clean.logoData='';await window._firebase.setDoc(window._firebase.doc(col,clean.id),clean);return true;}catch(e){console.error('fbSet',col,e);return false;}}
 
 async function fbDelete(col,id){if(!isFirebaseReady||!window._firebase||!id)return false;try{await window._firebase.deleteDoc(window._firebase.doc(col,id));return true;}catch(e){console.error('fbDelete',col,id,e);return false;}}
 
@@ -2655,49 +2663,159 @@ function getTeacherName(teacherId){
 function getStudentCount(){return DB.users.filter(function(u){return u.role==="Student"}).length}
 function getTeacherCount(){return DB.users.filter(function(u){return u.role==="Teacher"}).length}
 function getUnreadNotifCount(){return DB.notifications.filter(function(n){return!n.read}).length}
-function doRegister(){
-  var name=$("regName").value.trim();
-  var mobile=$("regMobile").value.trim();
-  var nationality=$("regNationality")&&$("regNationality").value||'';
-  var classGroup=$("regClassGroup").value;
-  var gender=$("regGender")&&$("regGender").value||'';
-  var password=$("regPassword").value;
-  var confirmPassword=$("regConfirmPassword")&&$("regConfirmPassword").value||'';
-  var declaration=$("regDeclaration")&&$("regDeclaration").checked;
-  if(!name||!mobile||!classGroup||!password){showToast(t("fillRequired"),"error");return;}
-  if(declaration===false){showToast(t("declarationRequired"),"error");return;}
-  if(password!==confirmPassword){showToast(t("passwordsNotMatch"),"error");return;}
-  if(password.length<6){showToast(t("passwordMin6"),"error");return;}
-  if(DB.users.find(function(u){return u.mobile===mobile;})){showToast("Mobile already registered","error");return;}
-  var hashedPw=hashPassword(password);
-  // Auto-assign teacher: prefer teacher of same class group
-  var teachers=DB.users.filter(function(u){return u.role==="Teacher"&&u.status==="Approved";});
-  var groupTeachers=teachers.filter(function(u){return u.classGroup===classGroup;});
-  var assignedTeacher=groupTeachers.length?groupTeachers[0]:(teachers.length?teachers[0]:null);
-  // Auto-generate class ID
-  var classID=$("regClassID")&&$("regClassID").value.trim();
-  if(!classID){
-    var groupCount=(DB.users||[]).filter(function(u){return u.role==="Student"&&u.classGroup===classGroup;}).length;
-    classID=classGroup.charAt(0).toUpperCase()+"-"+(groupCount+1);
+async function doRegister(){
+  // Disable button to prevent double submission
+  var btn=document.querySelector('#registerForm .btn-primary');
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Registering...';}
+  
+  function re_enable(){
+    var b=document.getElementById('regSubmitBtn');
+    if(b){b.disabled=false;b.innerHTML='<i class="fas fa-user-plus"></i> '+(t('register')||'Register');}
   }
-  var newUser={
-    id:generateId("S"),name:name,mobile:mobile,password:hashedPw,
-    role:"Student",email:($("regEmail")&&$("regEmail").value.trim())||'',
-    classGroup:classGroup,classID:classID,gender:gender,
-    teacher:assignedTeacher?assignedTeacher.id:'',
-    teacherName:assignedTeacher?assignedTeacher.name:'',
-    status:"Pending",nationality:nationality,
-    regDate:new Date().toISOString().slice(0,10),
-    notifPrefs:{}
-  };
-  fbSaveRecord('users',newUser,t('registrationSubmitted')||'Registration submitted! Awaiting approval.','');
-  addAudit('REGISTER','New registration: '+name+' ('+classGroup+')');
-  // Switch to login after 2s
-  setTimeout(function(){
-    var rf=$("registerForm");var lf=$("loginForm");
-    if(rf&&rf.classList)rf.classList.add("hidden");
-    if(lf&&lf.classList)lf.classList.remove("hidden");
-  },2000);
+  function showRegStatus(msg,type){
+    var st=document.getElementById('regStatusMsg');
+    if(!st)return;
+    st.style.display='block';
+    st.style.background=type==='error'?'#fff0f0':type==='success'?'#f0fff4':'#fff8e1';
+    st.style.color=type==='error'?'#c00':type==='success'?'#006400':'#7d5a00';
+    st.style.border='1px solid '+(type==='error'?'#f99':'#6f6');
+    st.innerHTML=(type==='error'?'❌ ':'✅ ')+msg;
+    if(type==='success')setTimeout(function(){st.style.display='none';},5000);
+  }
+  
+  try{
+    // Collect form values
+    var name=($('regName')&&$('regName').value||'').trim();
+    var mobile=($('regMobile')&&$('regMobile').value||'').trim();
+    var email=($('regEmail')&&$('regEmail').value||'').trim();
+    var nationality=($('regNationality')&&$('regNationality').value)||'';
+    var classGroup=($('regClassGroup')&&$('regClassGroup').value)||'';
+    var classID=($('regClassID')&&$('regClassID').value||'').trim();
+    var gender=($('regGender')&&$('regGender').value)||'';
+    var password=($('regPassword')&&$('regPassword').value)||'';
+    var confirmPassword=($('regConfirmPassword')&&$('regConfirmPassword').value)||'';
+    var declaration=$('regDeclaration')&&$('regDeclaration').checked;
+
+    // Validation with clear error messages
+    if(!name){showToast('Please enter your full name.','error');re_enable();return;showRegStatus('Please enter your full name.','error');}
+    if(!mobile){showToast('Please enter your mobile number.','error');re_enable();return;showRegStatus('Please enter your mobile number.','error');}
+    if(!/^\d{7,15}$/.test(mobile.replace(/[\s\-\+]/g,''))){showToast('Please enter a valid mobile number (digits only).','error');re_enable();return;showRegStatus('Please enter a valid mobile number (digits only).','error');}
+    if(!classGroup){showToast(t('classGroupRequired')||'Please select a Class Group.','error');re_enable();return;showRegStatus(t('classGroupRequired')||'Please select a Class Group.','error');}
+    if(!gender){showToast('Please select your gender.','error');re_enable();return;showRegStatus('Please select your gender.','error');}
+    if(!password){showToast('Please enter a password.','error');re_enable();return;showRegStatus('Please enter a password.','error');}
+    if(password.length<6){showToast(t('passwordMin6')||'Password must be at least 6 characters.','error');re_enable();return;showRegStatus(t('passwordMin6')||'Password must be at least 6 characters.','error');}
+    if(password!==confirmPassword){showToast(t('passwordsNotMatch')||'Passwords do not match.','error');re_enable();return;showRegStatus(t('passwordsNotMatch')||'Passwords do not match.','error');}
+    if(!declaration){showToast(t('declarationRequired')||'Please accept the declaration.','error');re_enable();return;showRegStatus(t('declarationRequired')||'Please accept the declaration.','error');}
+
+    // Check for duplicate mobile - first in local DB, then Firebase
+    var mobileExists=(DB.users||[]).find(function(u){return u.mobile===mobile;});
+    if(mobileExists){showToast(t('mobileAlreadyExists')||'This mobile number is already registered.','error');re_enable();return;showRegStatus(t('mobileAlreadyExists')||'This mobile number is already registered.','error');}
+
+    // Check email duplicate if provided
+    if(email){
+      var emailExists=(DB.users||[]).find(function(u){return u.email&&u.email.toLowerCase()===email.toLowerCase();});
+      if(emailExists){showToast(t('emailAlreadyExists')||'This email is already registered.','error');re_enable();return;showRegStatus(t('emailAlreadyExists')||'This email is already registered.','error');}
+    }
+
+    // If Firebase is ready, check duplicates in server too (catches race conditions)
+    if(isFirebaseReady&&window._firebase){
+      try{
+        var usersSnap=await window._firebase.getDocs(window._firebase.collection('users'));
+        usersSnap.forEach(function(doc){
+          var u=doc.data();
+          if(u.mobile===mobile)mobileExists=true;
+          if(email&&u.email&&u.email.toLowerCase()===email.toLowerCase())emailExists=true;
+        });
+        if(mobileExists){showToast(t('mobileAlreadyExists')||'This mobile number is already registered. Please login instead.','error');re_enable();return;showRegStatus(t('mobileAlreadyExists')||'This mobile number is already registered. Please login instead.','error');}
+        if(emailExists){showToast(t('emailAlreadyExists')||'This email is already registered.','error');re_enable();return;showRegStatus(t('emailAlreadyExists')||'This email is already registered.','error');}
+      }catch(firebaseErr){
+        console.warn('Firebase duplicate check failed, proceeding with local check:',firebaseErr.message);
+      }
+    }
+
+    // Hash password
+    var hashedPw=hashPassword(password);
+
+    // Auto-assign teacher by class group
+    var teachers=(DB.users||[]).filter(function(u){return u.role==='Teacher'&&u.status==='Approved';});
+    var groupTeachers=teachers.filter(function(u){return u.classGroup===classGroup;});
+    var assignedTeacher=groupTeachers.length?groupTeachers[0]:(teachers.length?teachers[0]:null);
+
+    // Auto-generate class ID
+    if(!classID){
+      var groupCount=(DB.users||[]).filter(function(u){return u.role==='Student'&&u.classGroup===classGroup;}).length;
+      classID=classGroup.charAt(0).toUpperCase()+'-'+(groupCount+1);
+    }
+
+    var newUser={
+      id:generateId('S'),name:name,mobile:mobile,password:hashedPw,
+      role:'Student',email:email,
+      classGroup:classGroup,classID:classID,gender:gender,
+      teacher:assignedTeacher?assignedTeacher.id:'',
+      teacherName:assignedTeacher?assignedTeacher.name:'',
+      status:'Pending',nationality:nationality,
+      regDate:new Date().toISOString().slice(0,10),
+      notifPrefs:{}
+    };
+
+    // Save to local DB
+    if(!DB.users)DB.users=[];
+    DB.users.push(newUser);
+    saveDBLocalOnly();
+
+    // Save to Firebase with explicit error handling
+    console.log('[doRegister] Firebase ready:',isFirebaseReady,'user:',newUser.id);
+    // Wait up to 8s for Firebase ES module to load
+    if(window._firebaseReady&&window._firebase)isFirebaseReady=true;
+    if(!isFirebaseReady||!window._firebase){
+      showRegStatus('Connecting to server...','warning');
+      for(var _w=0;_w<50;_w++){
+        await new Promise(function(resolve){setTimeout(resolve,200);});
+        if(window._firebaseReady&&window._firebase){isFirebaseReady=true;break;}
+      }
+    }
+    console.log('[doRegister] Firebase:',isFirebaseReady,'_firebase:',!!window._firebase,'_fbReady:',!!window._firebaseReady);
+    var firebaseSaved=false;
+    if(window._firebase){
+      try{
+        isFirebaseReady=true;
+        await fbSet('users',newUser);
+        firebaseSaved=true;
+      }catch(fbErr){
+        console.error('Firebase save failed:',fbErr);
+        showToast('Registration saved locally. Will sync when connection is restored.','warning');
+      }
+    } else {
+      showToast('Saved offline. Will sync to server when connected.','warning');
+    }
+
+    addAudit('REGISTER','New registration: '+name+' ('+classGroup+')');
+
+    // Notify admins
+    var admins=(DB.users||[]).filter(function(u){return u.role==='Admin';}).map(function(u){return u.id;});
+    if(admins.length&&typeof pushNotification==='function'){
+      pushNotification('New Registration',name+' has registered for '+classGroup+'. Awaiting approval.','info','dashboard',admins);
+    }
+
+    // Success
+    showToast(t('registrationSubmitted')||'Registration submitted! Awaiting admin approval.','success');showRegStatus(t('registrationSubmitted')||'Registration submitted! Awaiting admin approval.','success');
+    re_enable();
+
+    // Switch to login after 2.5s
+    setTimeout(function(){
+      var rf=$('registerForm'),lf=$('loginForm');
+      if(rf)rf.classList.add('hidden');
+      if(lf)lf.classList.remove('hidden');
+      // Pre-fill mobile for convenience
+      var loginMobile=$('loginMobile');
+      if(loginMobile)loginMobile.value=mobile;
+    },2500);
+
+  }catch(err){
+    console.error('Registration error:',err);
+    showToast('Registration failed: '+(err.message||'Unknown error. Please try again.'),'error');
+    re_enable();
+  }
 }
 function resendForgotOTP(){var method=getOtpMethod();var mobile=$("forgotMobile").value.trim();var user=DB.users.find(function(u){return u.mobile===mobile});if(!user)return;if(method==="email"){var email=$("forgotEmail").value.trim();if(email)sendForgotEmailOTP(mobile,email,user.name)}else{sendForgotWhatsAppOTP(mobile,user.name)}}
 function selectOtpMethod(method){currentOtpMethod=method;var radios=document.querySelectorAll('input[name="otpMethod"]');radios.forEach(function(r){r.checked=r.value===method});var wa=$("lblOtpWA"),em=$("lblOtpEmail"),ew=$("forgotEmailWrap");if(wa)wa.style.borderColor=method==="whatsapp"?"var(--primary)":"var(--border)";if(em)em.style.borderColor=method==="email"?"var(--primary)":"var(--border)";if(ew){if(method==="email"){ew.classList.remove("hidden");ew.style.display="block"}else{ew.classList.add("hidden");ew.style.display="none"}}var txt=$("forgotStep1Text");if(txt)txt.textContent=method==="email"?"Enter your mobile number and email to receive OTP.":"Enter your mobile number to receive OTP via WhatsApp."}
@@ -3839,14 +3957,15 @@ async function autoTranslateAssignmentQuestions(a,callback){
   callback();
 }function openSubmitAssignment(assId){var a=DB.assignments.find(function(x){return x.id===assId});if(!a)return;
   if(a.closeDate&&new Date()>new Date(a.closeDate)){showToast("Submissions closed \u2014 deadline: "+formatDate(a.closeDate),"error");return;}
-  if(a.dueDate&&new Date()>new Date(a.dueDate)){showToast("Past due date \u2014 late submission","warning");}var user=DB.currentUser;if(!a||a.status!=="Active"){showToast(t("assignmentClosed"),"error");return}if(isClosed(a.closeDate)){showToast(t("assignmentClosed"),"error");return}var maxAtt2=a.maxAttempts||3;var attCount=DB.submissions.filter(function(s){return s.studentId===user.id&&s.assignmentId===assId}).length;if(attCount>=maxAtt2){showToast(t("maxAttemptsReached")+" ("+maxAtt2+")","error");return}currentSubmissionAssId=assId;currentSubmissionAnswers=[];autoTranslateAssignmentQuestions(a,function(){$("submitAssTitle").innerHTML='<i class="fas fa-edit"></i> '+esc(a.title);var html='';html+='<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.8rem"><strong>'+t("marks")+':</strong> '+a.marks+' | <strong>'+t("due")+':</strong> '+formatDateTime(a.closeDate)+'</div>';
+  if(a.dueDate&&new Date()>new Date(a.dueDate)){showToast("Past due date \u2014 late submission","warning");}var user=DB.currentUser;if(!a||a.status!=="Active"){showToast(t("assignmentClosed"),"error");return}if(isClosed(a.closeDate)){showToast(t("assignmentClosed"),"error");return}var maxAtt2=a.maxAttempts||3;var attCount=DB.submissions.filter(function(s){return s.studentId===user.id&&s.assignmentId===assId}).length;if(attCount>=maxAtt2){showToast(t("maxAttemptsReached")+" ("+maxAtt2+")","error");return}currentSubmissionAssId=assId;currentSubmissionAnswers=[];autoTranslateAssignmentQuestions(a,function(){$("submitAssTitle").innerHTML='<i class="fas fa-edit"></i> '+esc(a.title);var html='';var maxAtt3=parseInt(a.maxAttempts)||1;var attCount3=(DB.submissions||[]).filter(function(s){return s.studentId===user.id&&s.assignmentId===assId;}).length;var attLeft3=Math.max(0,maxAtt3-attCount3);
+    html+='<div style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:var(--radius-sm);font-size:0.8rem"><strong>'+t("marks")+':</strong> '+a.marks+' | <strong>'+t("due")+':</strong> '+formatDateTime(a.closeDate)+(maxAtt3>1?' | <strong><i class="fas fa-redo"></i> Attempts:</strong> '+attLeft3+' of '+maxAtt3+' remaining':'')+'</div>';
   // Show attachment as thumbnail if present
   if(a.attachment&&a.attachment.url){
     var att=a.attachment;
     var isImage=att.type&&att.type.startsWith('image');
     if(isImage){
       html+='<div style="margin-bottom:12px"><div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--primary)"><i class="fas fa-paperclip"></i> Attachment</div>';
-      html+='<img src="'+att.url+'" alt="attachment" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="viewFullImage(\''+att.url+'\')"></div>';
+      html+='<img src="'+att.url+'" alt="attachment" style="max-width:100%;max-height:120px;object-fit:contain;border-radius:8px;cursor:zoom-in;border:1px solid var(--border)" title="Tap to view full size" onclick="viewFullImage(\''+att.url+'\')"></div>';
     } else {
       html+='<div style="margin-bottom:12px"><a href="'+att.url+'" target="_blank" class="btn btn-outline btn-sm"><i class="fas fa-file-download"></i> '+esc(att.name||'Attachment')+'</a></div>';
     }
@@ -3854,19 +3973,26 @@ async function autoTranslateAssignmentQuestions(a,callback){
     var isImg=a.attachmentData.startsWith('data:image');
     if(isImg){
       html+='<div style="margin-bottom:12px"><div style="font-size:0.8rem;font-weight:600;margin-bottom:6px;color:var(--primary)"><i class="fas fa-paperclip"></i> Attachment</div>';
-      html+='<img src="'+a.attachmentData+'" alt="attachment" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:8px;cursor:pointer;border:1px solid var(--border)" onclick="viewFullImage(this.src)"></div>';
+      html+='<img src="'+a.attachmentData+'" alt="attachment" style="max-width:100%;max-height:120px;object-fit:contain;border-radius:8px;cursor:zoom-in;border:1px solid var(--border)" title="Tap to view full size" onclick="viewFullImage(this.src)"></div>';
     }
   }var lang=currentLang||'en';if(a.questions&&a.questions.length>0){a.questions.forEach(function(q,qi){currentSubmissionAnswers.push({questionId:q.id,answer:""});var qTextEn=q.textEn||q.text||'';var qTextTa=q.textTa||'';var qTextSi=q.textSi||'';var qText=lang==='ta'&&qTextTa?qTextTa:(lang==='si'&&qTextSi?qTextSi:qTextEn);html+='<div style="margin-bottom:16px;padding:14px;background:var(--bg);border-radius:var(--radius-sm)">';html+='<div style="font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start"><div><span style="color:var(--primary)">Q'+(qi+1)+'.</span> '+esc(qText)+' <span style="color:var(--accent);font-size:0.7rem">['+t(q.type)+']</span></div></div>';if(q.type==="mcq"&&q.options&&q.options.length>0){html+='<div class="answer-mcq">';var dispOpts=lang==='ta'&&q.optionsTa&&q.optionsTa.length?q.optionsTa:(lang==='si'&&q.optionsSi&&q.optionsSi.length?q.optionsSi:q.options);
 (dispOpts||q.options||[]).forEach(function(opt,oi){html+='<label class="answer-option"><input type="radio" name="q_'+q.id+'" value="'+oi+'" onchange="updateAnswer(\''+q.id+'\','+oi+')"> <span>'+String.fromCharCode(65+oi)+'. '+esc(opt)+'</span></label>'});html+='</div>'}else if(q.type==="truefalse"){html+='<div class="answer-mcq">';html+='<label class="answer-option"><input type="radio" name="q_'+q.id+'" value="0" onchange="updateAnswer(\''+q.id+'\',0)"> <span>'+t("true")+'</span></label>';html+='<label class="answer-option"><input type="radio" name="q_'+q.id+'" value="1" onchange="updateAnswer(\''+q.id+'\',1)"> <span>'+t("false")+'</span></label>';html+='</div>'}else{html+='<textarea class="answer-textarea" id="ans_'+q.id+'" placeholder="'+t("typeYourAnswer")+'..." oninput="updateAnswer(\''+q.id+'\',this.value)"></textarea>'}html+='</div>'})}else{html+='<div class="empty-state"><i class="fas fa-question-circle"></i><h4>'+t("noQuestionsYet")+'</h4></div>'}$("submitAssBody").innerHTML=html;openModal("submitAssModal")})}
 function updateAnswer(qid,val){var ans=currentSubmissionAnswers.find(function(a){return a.questionId===qid});if(ans)ans.answer=val}
 function viewFullImage(src){
   var ov=document.createElement('div');
-  ov.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;cursor:zoom-out';
+  var closeBtn=document.createElement('button');
+  closeBtn.innerHTML='<i class="fas fa-times"></i> Close';
+  closeBtn.style.cssText='position:absolute;top:12px;right:12px;background:white;border:none;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:0.85rem;font-weight:600';
+  closeBtn.onclick=function(e){e.stopPropagation();ov.remove();};
+  var img=document.createElement('img');img.src=src;
+  img.style.cssText='max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px;box-shadow:0 0 30px rgba(255,255,255,0.1)';
+  img.onclick=function(e){e.stopPropagation();};
+  var hint=document.createElement('div');
+  hint.textContent='Tap outside image to close';
+  hint.style.cssText='color:rgba(255,255,255,0.4);font-size:0.75rem;margin-top:10px';
   ov.onclick=function(){ov.remove();};
-  var img=document.createElement('img');
-  img.src=src;
-  img.style.cssText='max-width:95vw;max-height:95vh;object-fit:contain;border-radius:8px;';
-  ov.appendChild(img);
+  ov.appendChild(closeBtn);ov.appendChild(img);ov.appendChild(hint);
   document.body.appendChild(ov);
 }
 
@@ -5062,6 +5188,8 @@ document.addEventListener('DOMContentLoaded',async function(){
   document.querySelectorAll('.modal-overlay').forEach(function(m){
     if(m.parentElement !== document.body) document.body.appendChild(m);
   });
+  // Pre-populate dropdowns
+  setTimeout(function(){if(typeof populateAssClassGroup==='function')populateAssClassGroup();},200);
   await initDatabase();
   setupModalClose();
   window.forceSyncNow=forceSyncNow;
@@ -5083,6 +5211,8 @@ document.addEventListener('DOMContentLoaded',async function(){
     $('authScreen').classList.remove('hidden');
     $('mainApp').classList.add('hidden');
     try{showAuthLangSwitcher();}catch(e){}
+    // Pre-populate class groups on auth screen
+    setTimeout(function(){if(typeof populateAssClassGroup==='function')populateAssClassGroup();},300);
   }
   try{startAutoSync();}catch(e){}
 });
