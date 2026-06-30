@@ -19,49 +19,28 @@
 <title>JDC-LMS | Jeddah Dawah Center – Tamil Section</title>
 <script>
 // ══ JDC-LMS Notification Handler ══
-// Note: Background push requires a separate firebase-messaging-sw.js file.
-// For Netlify single-file deployments we use foreground notifications
-// and real-time Firestore onSnapshot for instant in-app alerts.
-
-// Try to register a minimal SW for PWA install support only
+// Registers the REAL service worker file (firebase-messaging-sw.js), which
+// MUST be deployed as its own static file at the SITE ROOT alongside this
+// index.html (e.g. https://yourdomain.com/firebase-messaging-sw.js) — see
+// PUSH_NOTIFICATIONS_SETUP.md for the full deployment checklist.
+//
+// This SW handles push delivery while the app is closed or backgrounded,
+// plus notification-click navigation. Foreground (app open) notifications
+// are handled separately, later in this file, via Firestore real-time sync
+// — see handleIncomingNotif().
 if ('serviceWorker' in navigator) {
-  // Create minimal SW that handles notification clicks
-  var minimalSW = [
-    'self.addEventListener("notificationclick",function(e){',
-    '  e.notification.close();',
-    '  var page=(e.notification.data&&e.notification.data.page)||"dashboard";',
-    '  e.waitUntil(clients.matchAll({type:"window"}).then(function(list){',
-    '    for(var c of list){if("focus" in c){c.postMessage({type:"NAVIGATE",page:page});return c.focus();}}',
-    '    return clients.openWindow(location.origin+location.pathname+"?page="+page);',
-    '  }));',
-    '});',
-    'self.addEventListener("push",function(e){',
-    '  var data=e.data?e.data.json():{};',
-    '  var opts={body:data.body||"New update from JDC-LMS",icon:"/icon.png",',
-    '    data:{page:data.page||"dashboard"},requireInteraction:false};',
-    '  e.waitUntil(self.registration.showNotification(data.title||"JDC-LMS",opts));',
-    '});'
-  ].join('\n');
-
-  try {
-    var blob = new Blob([minimalSW], {type:'text/javascript'});
-    var swUrl = URL.createObjectURL(blob);
-    navigator.serviceWorker.register(swUrl).then(function(reg){
-      window._swRegistration = reg;
-      console.log('SW registered for notifications ✅');
-    }).catch(function(e){
-      // Blob SW may fail on some browsers/protocols — use Notification API directly
-      console.info('SW skipped (blob not supported), using Web Notifications API directly');
-      window._swRegistration = null;
-    });
-    navigator.serviceWorker.addEventListener('message', function(event){
-      if(event.data&&event.data.type==='NAVIGATE'&&window.navigateTo){
-        navigateTo(event.data.page);
-      }
-    });
-  } catch(e) {
-    console.info('SW not available:', e.message);
-  }
+  navigator.serviceWorker.register('/firebase-messaging-sw.js').then(function(reg){
+    window._swRegistration = reg;
+    console.log('Service worker registered ✅', reg.scope);
+  }).catch(function(e){
+    console.warn('Service worker registration failed (background push will not work):', e.message);
+    window._swRegistration = null;
+  });
+  navigator.serviceWorker.addEventListener('message', function(event){
+    if(event.data && event.data.type === 'NAVIGATE' && window.navigateTo){
+      navigateTo(event.data.page);
+    }
+  });
 }
 </script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" crossorigin="anonymous">
@@ -2966,7 +2945,37 @@ async function doLogin(){
 }
 function doLogout(){addAudit("LOGOUT",(DB.currentUser?DB.currentUser.role:"User")+" "+(DB.currentUser?DB.currentUser.name:"unknown")+" logged out");DB.currentUser=null;localStorage.setItem(DB_KEY,JSON.stringify(DB));$("mainApp").classList.add("hidden");$("authScreen").classList.remove("hidden");backToRoleSelector();clearTimeout(window._sessionTimer);document.removeEventListener("click",resetSessionTimer);document.removeEventListener("keydown",resetSessionTimer);showToast(t("loggedOut"),"success")}
 
-function updateNotifBadge(){var badge=$('notifBadge');if(!badge)return;var user=DB.currentUser;if(!user){badge.style.display='none';return}var unread=DB.notifications.filter(function(n){return !n.read&&(n.target==='all'||n.target===user.id||n.target===user.role)}).length;if(unread>0){badge.textContent=unread>9?'9+':unread;badge.style.display='flex'}else{badge.style.display='none'}}
+// ── Shared notification targeting/read helpers ─────────────────────
+// Tolerant of every notification shape this app has ever written
+// (targetUsers / target / recipientId), so older Firestore documents
+// keep working after this cleanup.
+function _notifTargetField(n){
+  if(n.targetUsers!==undefined)return n.targetUsers;
+  if(n.target!==undefined)return n.target;
+  if(n.recipientId!==undefined)return [n.recipientId];
+  return 'all';
+}
+function notifIsForUser(n,user){
+  if(!user)return false;
+  var t=_notifTargetField(n);
+  if(t==='all')return true;
+  if(t==='students')return user.role==='Student';
+  if(t==='teachers')return user.role==='Teacher';
+  if(Array.isArray(t))return t.indexOf(user.id)>=0;
+  if(typeof t==='string')return t===user.id||t===user.role;
+  return false;
+}
+function notifIsRead(n,user){
+  if(!user)return true;
+  if(Array.isArray(n.readBy))return n.readBy.indexOf(user.id)>=0;
+  return !!n.read;
+}
+function myNotifications(){
+  var user=DB.currentUser;
+  if(!user)return [];
+  return (DB.notifications||[]).filter(function(n){return notifIsForUser(n,user);});
+}
+function updateNotifBadge(){var badge=$('notifBadge');if(!badge)return;var user=DB.currentUser;if(!user){badge.style.display='none';return}var unread=myNotifications().filter(function(n){return !notifIsRead(n,user);}).length;if(unread>0){badge.textContent=unread>9?'9+':unread;badge.style.display='flex'}else{badge.style.display='none'}}
 
 async function navigateTo(page){window._currentPage=page;window.currentPage=page;
   currentPage=page;
@@ -3027,7 +3036,7 @@ function getTeacherName(teacherId){
 
 function getStudentCount(){return DB.users.filter(function(u){return u.role==="Student"}).length}
 function getTeacherCount(){return DB.users.filter(function(u){return u.role==="Teacher"}).length}
-function getUnreadNotifCount(){return DB.notifications.filter(function(n){return!n.read}).length}
+function getUnreadNotifCount(){var user=DB.currentUser;if(!user)return 0;return myNotifications().filter(function(n){return !notifIsRead(n,user);}).length}
 async function doRegister(){
   // Disable button to prevent double submission
   var btn=document.querySelector('#registerForm .btn-primary');
@@ -3530,20 +3539,23 @@ function safePrint(html, title){
 // JDC-LMS PUSH NOTIFICATION SYSTEM
 // ══════════════════════════════════════════════════════════════════
 
-// FCM VAPID Key (Web Push Certificate) — from Firebase Console
-// Go to: Firebase Console → Project Settings → Cloud Messaging → Web Push certificates
-// Replace this with your actual VAPID key
-var FCM_VAPID_KEY = 'BEl62iUYgUivxIkv69yViEuiBIa40HI80NM9be7rFwJF5587v2XqUdx3tHuAeGCFxXq9GDVbKCJVqDSiLBRBiA4';
+// Generate this yourself: Firebase Console → Project Settings → Cloud
+// Messaging → Web Push certificates → "Generate key pair". The placeholder
+// below will NOT deliver push — replace it before going live (see
+// PUSH_NOTIFICATIONS_SETUP.md).
+var FCM_VAPID_KEY = 'REPLACE_WITH_YOUR_VAPID_KEY';
 
 // Notification categories with default enabled state
 var NOTIF_CATEGORIES = {
   assignments:    {label:'New Assignments',     icon:'📝', default:true},
+  assignmentReminder: {label:'Assessment Reminders', icon:'⏰', default:true},
   results:        {label:'Results & Grades',    icon:'🏆', default:true},
   messages:       {label:'Messages',            icon:'💬', default:true},
   announcements:  {label:'Announcements',       icon:'📢', default:true},
   events:         {label:'Events',              icon:'📅', default:true},
   certificates:   {label:'Certificates',        icon:'🎓', default:true},
   attendance:     {label:'Attendance Updates',  icon:'✅', default:true},
+  attendanceReminder: {label:'Attendance Reminders (Teachers)', icon:'📅', default:true},
   onlineClasses:  {label:'Online Classes',      icon:'🎥', default:true},
 };
 
@@ -3668,17 +3680,8 @@ async function pushNotification(title, body, category, page, targetUserIds){
 // ── Handle incoming notification (from onSnapshot) ────────────────
 function handleIncomingNotif(notif){
   if(!DB.currentUser)return;
-  var uid = DB.currentUser.id;
-  // Check if for this user
-  var targeted = notif.targetUsers;
-  var forme = targeted==='all' ||
-    (Array.isArray(targeted) && targeted.includes(uid)) ||
-    (targeted === DB.currentUser.role.toLowerCase()+'s') ||
-    (targeted === DB.currentUser.role);
-  if(!forme)return;
-  // Check not already read
-  var readBy = notif.readBy||[];
-  if(readBy.includes(uid))return;
+  if(!notifIsForUser(notif, DB.currentUser))return;
+  if(notifIsRead(notif, DB.currentUser))return;
   // Check category preference
   if(!notifEnabled(notif.category||'announcements'))return;
   // Show it
@@ -3687,9 +3690,15 @@ function handleIncomingNotif(notif){
 }
 
 // ── Handle FCM foreground message ─────────────────────────────────
+// Foreground (app open) notifications are already shown via the Firestore
+// real-time listener → handleIncomingNotif(), which fires the instant a
+// notification document is created — regardless of whether FCM is set up
+// at all. FCM's job is exclusively BACKGROUND delivery (handled by
+// firebase-messaging-sw.js's onBackgroundMessage). If FCM also fired its
+// foreground callback here we'd risk showing the same alert twice on an
+// open tab, so this is intentionally a no-op beyond logging.
 window.handleFCMMessage = function(payload){
-  var data = payload.data || payload.notification || {};
-  showLocalNotif(data.title||'JDC-LMS', data.body||data.message||'', data.category, data.page);
+  console.log('FCM foreground message received (ignored — Firestore real-time already handled it):', payload);
 };
 
 // ── Mark notification as read ─────────────────────────────────────
@@ -3748,15 +3757,11 @@ function renderNotifPrefsPage(){
   });
   html += '</div></div>';
   // Recent notifications
-  var myNotifs = (DB.notifications||[]).filter(function(n){
-    var uid=DB.currentUser.id;
-    var t=n.targetUsers;
-    return t==='all'||(Array.isArray(t)&&t.includes(uid))||(t===DB.currentUser.role.toLowerCase()+'s')||(t===DB.currentUser.role);
-  }).slice(-20).reverse();
+  var myNotifs = myNotifications().slice(-20).reverse();
   html += '<div class="card" style="margin-top:16px"><div class="card-header"><h3>Recent Notifications ('+myNotifs.length+')</h3></div><div class="card-body">';
   if(!myNotifs.length){html += '<div style="text-align:center;color:var(--text-light);padding:20px">No notifications yet</div>';}
   myNotifs.forEach(function(n){
-    var read = (n.readBy||[]).includes(DB.currentUser.id)||n.read;
+    var read = notifIsRead(n, DB.currentUser);
     var icon = NOTIF_CATEGORIES[n.category]?NOTIF_CATEGORIES[n.category].icon:'🔔';
     html += '<div class="list-item" style="'+(read?'opacity:0.6':'')+'" onclick="markNotifRead(\''+n.id+'\');navigateTo(\''+( n.page||'dashboard')+'\');" style="cursor:pointer">';
     html += '<div class="list-avatar" style="background:var(--accent);font-size:1.2rem">'+icon+'</div>';
@@ -4787,21 +4792,10 @@ function checkCertificateEligibility(studentId){
   showToast('🎓 Certificate generated for '+student.name+'! Awaiting admin approval.','success');
 }
 
-function pushNotification(title,body,type,page,userIds){
-  if(!userIds||!userIds.length)return;
-  userIds.forEach(function(uid){
-    var notif={
-      id:generateId('N'),recipientId:uid,
-      title:title,body:body,type:type||'info',
-      page:page||'dashboard',read:false,
-      createdAt:new Date().toISOString()
-    };
-    if(!DB.notifications)DB.notifications=[];
-    DB.notifications.push(notif);
-    fbSaveRecord('notifications',notif,null,null);
-  });
-  updateNotifBadge();
-}
+// NOTE: pushNotification() is defined once, earlier in this file (the
+// Firestore-backed version used by the real-time sync + Cloud Functions
+// pipeline). A second, incompatible definition used to live here and
+// silently override it — removed.
 
 function openStudentVideoRecorder(){
   var user=DB.currentUser;
@@ -4971,7 +4965,12 @@ function shareCertEmail(certId){var cert=DB.certificates.find(function(c){return
 function renderOnlineClasses(){var user=DB.currentUser;if(!user)return;var html='<div style="margin-bottom:10px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3 data-i18n="onlineClasses" style="margin:0"></h3></div>';if(user.role==="Admin"||user.role==="Teacher"){html+='<button class="btn btn-primary btn-sm" onclick="openOnlineClassModal()" style="margin-bottom:8px"><i class="fas fa-plus"></i> '+t("addOnlineClass")+'</button>'}html+='</div>';var classes=DB.onlineClasses;if(classes.length===0){html+=emptyState("noOnlineClasses")}else{classes.forEach(function(oc){var teacher=DB.users.find(function(u){return u.id===oc.teacherId});var htmlContent='<div class="online-class-card">';htmlContent+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';htmlContent+='<div><div class="oc-title">'+esc(oc.title)+' <span class="oc-platform">'+oc.platform+'</span></div>';htmlContent+='<div class="oc-meta"><i class="fas fa-user" style="color:var(--primary)"></i> '+(teacher?esc(teacher.name):"Unknown")+' | <i class="fas fa-users" style="color:var(--primary)"></i> '+oc.group+'</div>';htmlContent+='<div class="oc-meta"><i class="fas fa-calendar" style="color:var(--primary)"></i> '+formatDate(oc.date)+' <i class="fas fa-clock" style="color:var(--primary);margin-left:8px"></i> '+oc.time+'</div>';if(oc.meetingId)htmlContent+='<div class="oc-meta"><i class="fas fa-id-card" style="color:var(--primary)"></i> '+esc(oc.meetingId)+'</div>';if(oc.notes)htmlContent+='<div class="oc-meta" style="font-style:italic;margin-top:6px"><i class="fas fa-sticky-note" style="color:var(--accent)"></i> '+esc(oc.notes)+'</div>';htmlContent+='</div>';if(user.role==="Admin"||user.role==="Teacher"){htmlContent+='<div style="display:flex;gap:4px"><button class="btn btn-icon btn-sm" style="background:var(--info);color:white" onclick="editOnlineClass(\''+oc.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="confirmDeleteOnlineClass(\''+oc.id+'\')"><i class="fas fa-trash"></i></button></div>'}htmlContent+='</div>';htmlContent+='<a href="'+esc(oc.link)+'" target="_blank" class="oc-link"><i class="fas fa-video"></i> '+t("joinClass")+'</a>';htmlContent+='</div>';html+=htmlContent})}$('mainContent').innerHTML=html;applyTranslations()}
 function openOnlineClassModal(){$('ocEditId').value='';$('ocModalTitle').innerHTML='<i class="fas fa-video"></i> '+t('addOnlineClass');$('ocTitle').value='';$('ocGroup').value='All';$('ocPlatform').value='Zoom';$('ocLink').value='';$('ocMeetingId').value='';$('ocDate').value='';$('ocTime').value='';$('ocNotes').value='';populateTeacherSelect('ocTeacher');$('ocTeacher').value=DB.currentUser.id||'';openModal('onlineClassModal')}
 function editOnlineClass(id){var oc=DB.onlineClasses.find(function(x){return x.id===id});if(!oc)return;$('ocEditId').value=oc.id;$('ocModalTitle').innerHTML='<i class="fas fa-video"></i> Edit Online Class';$('ocTitle').value=oc.title;populateTeacherSelect('ocTeacher');$('ocTeacher').value=oc.teacherId;$('ocGroup').value=oc.group;$('ocPlatform').value=oc.platform;$('ocLink').value=oc.link;$('ocMeetingId').value=oc.meetingId;$('ocDate').value=oc.date;$('ocTime').value=oc.time;$('ocNotes').value=oc.notes;openModal('onlineClassModal')}
-function saveOnlineClass(){var editId=$('ocEditId').value;var title=$('ocTitle').value.trim();var link=$('ocLink').value.trim();var date=$('ocDate').value;if(!title||!link||!date){showToast(t('fillRequired'),'error');return}var data={id:editId||generateId('OC'),title:title,teacherId:$('ocTeacher').value,group:$('ocGroup').value,platform:$('ocPlatform').value,link:link,meetingId:$('ocMeetingId').value.trim(),date:date,time:$('ocTime').value,notes:$('ocNotes').value.trim(),createdBy:DB.currentUser.id};addAudit('ONLINE_CLASS_SAVE','Saved: '+title);clearFormDirty();closeModal('onlineClassModal');fbSaveRecord('onlineClasses',data,'Class saved ✅',renderOnlineClasses);}
+function saveOnlineClass(){var editId=$('ocEditId').value;var title=$('ocTitle').value.trim();var link=$('ocLink').value.trim();var date=$('ocDate').value;if(!title||!link||!date){showToast(t('fillRequired'),'error');return}var isNew=!editId;var data={id:editId||generateId('OC'),title:title,teacherId:$('ocTeacher').value,group:$('ocGroup').value,platform:$('ocPlatform').value,link:link,meetingId:$('ocMeetingId').value.trim(),date:date,time:$('ocTime').value,notes:$('ocNotes').value.trim(),createdBy:DB.currentUser.id};addAudit('ONLINE_CLASS_SAVE','Saved: '+title);clearFormDirty();closeModal('onlineClassModal');fbSaveRecord('onlineClasses',data,'Class saved ✅',renderOnlineClasses);
+if(isNew){
+  var classTarget=(data.group&&data.group!=='All')?DB.users.filter(function(u){return u.role==='Student'&&u.classGroup===data.group}).map(function(u){return u.id;}):'students';
+  pushNotification('📚 New Class: '+title,'A new online class has been scheduled for '+formatDate(date)+(data.time?' at '+data.time:'')+'.','onlineClasses','onlineClasses',classTarget);
+}
+}
 function confirmDeleteOnlineClass(id){$('deleteConfirmText').textContent=t('areYouSure');$('deleteConfirmBtn').onclick=function(){closeModal('deleteModal');fbDeleteRecord('onlineClasses',id,'Class deleted ✅',renderOnlineClasses);};openModal('deleteModal');}
 
 // ===================== BOOKING CONFIRM & SHARE =====================
@@ -5131,14 +5130,26 @@ function sendComposeMessage(){
   if(!targets.length){showToast('No recipients','error');return;}
   if(!DB.messages)DB.messages=[];
   targets.forEach(function(recip){
-    var m={id:generateId('M'),senderId:user.id,senderName:user.name,recipientId:recip.id,recipientName:recip.name,subject:subject||'(no subject)',content:content,date:now.slice(0,10),timestamp:now,read:false,readBy:[user.id],folder:'inbox'};
+    // 'from'/'to' are required (inbox/thread views filter on them); the
+    // senderId/recipientId fields are kept too for the bulk-delete/legacy paths.
+    var m={id:generateId('M'),senderId:user.id,senderName:user.name,recipientId:recip.id,recipientName:recip.name,from:user.id,to:recip.id,subject:subject||'(no subject)',content:content,date:now.slice(0,10),timestamp:now,read:false,readBy:[user.id],folder:'inbox'};
     DB.messages.push(m);fbSaveRecord('messages',m,null,null);
   });
-  var sent={id:generateId('M'),senderId:user.id,senderName:user.name,recipientId:broadcastName?'broadcast':(targets[0]&&targets[0].id)||'',recipientName:broadcastName||(targets[0]&&targets[0].name)||'',subject:subject||'(no subject)',content:content,date:now.slice(0,10),timestamp:now,read:true,readBy:[user.id],folder:'sent'};
+  var sent={id:generateId('M'),senderId:user.id,senderName:user.name,recipientId:broadcastName?'broadcast':(targets[0]&&targets[0].id)||'',recipientName:broadcastName||(targets[0]&&targets[0].name)||'',from:user.id,to:broadcastName?'broadcast':(targets[0]&&targets[0].id)||'',subject:subject||'(no subject)',content:content,date:now.slice(0,10),timestamp:now,read:true,readBy:[user.id],folder:'sent'};
   DB.messages.push(sent);fbSaveRecord('messages',sent,null,null);
+  pushNotification('💬 New Message from '+user.name, subject?subject:(content.length>60?content.slice(0,60)+'…':content), 'messages','messages', targets.map(function(u){return u.id;}));
   showToast('Message sent!','success');renderMessages();
 }
-function sendReply(otherUserId){var content=$("replyInput").value.trim();if(!content)return;DB.messages.push({id:generateId("M"),from:DB.currentUser.id,to:otherUserId,subject:"",content:content,date:new Date().toISOString().slice(0,10),read:false});saveDB();$("replyInput").value="";openMessageThread(otherUserId)}
+function sendReply(otherUserId){
+  var user=DB.currentUser;if(!user)return;
+  var content=$("replyInput").value.trim();if(!content)return;
+  var other=DB.users.find(function(u){return u.id===otherUserId;});
+  var now=new Date().toISOString();
+  var m={id:generateId("M"),senderId:user.id,senderName:user.name,recipientId:otherUserId,recipientName:other?other.name:'',from:user.id,to:otherUserId,subject:"",content:content,date:now.slice(0,10),timestamp:now,read:false,readBy:[user.id],folder:'inbox'};
+  DB.messages.push(m);fbSaveRecord('messages',m,null,null);
+  pushNotification('💬 New Message from '+user.name, content.length>60?content.slice(0,60)+'…':content, 'messages','messages',[otherUserId]);
+  $("replyInput").value="";openMessageThread(otherUserId);
+}
 function showMyBookings(){var user=DB.currentUser;var isAdmin=user.role==="Admin";var targetId=isAdmin?null:user.id;var myRegs=isAdmin?DB.eventRegistrations:DB.eventRegistrations.filter(function(r){return r.studentId===targetId});var html='<div class="section-header"><h3><i class="fas fa-ticket-alt" style="color:var(--accent);margin-right:8px"></i>'+(isAdmin?t('allBookings'):t('myBookings'))+'</h3></div>';if(myRegs.length===0)html+='<div class="card"><div class="card-body">'+emptyState('noBookings')+'</div></div>';else myRegs.forEach(function(reg){var event=DB.events.find(function(e){return e.id===reg.eventId});var student=DB.users.find(function(u){return u.id===reg.studentId});if(!event)return;html+='<div class="booking-card">';html+='<div class="booking-title">'+esc(event.name)+'</div>';html+='<div class="booking-meta"><i class="fas fa-calendar"></i> '+formatDate(event.date)+' <i class="fas fa-clock" style="margin:0 8px"></i>'+event.time+'</div>';html+='<div class="booking-meta"><i class="fas fa-map-marker-alt"></i> '+esc(event.venue)+' | <i class="fas fa-users" style="margin:0 4px"></i>'+reg.totalSeats+' '+t('seats')+(isAdmin&&student?' | <i class="fas fa-user" style="margin:0 4px"></i>'+esc(student.name):'')+'</div>';html+='<span class="ass-status badge-'+(reg.status==='Confirmed'?'active':(reg.status==='Pending'?'pending':'inactive'))+'">'+reg.status+'</span>';html+='<div class="booking-actions">';html+='<button class="btn btn-primary btn-sm" onclick="showTicket(\''+reg.id+'\')"><i class="fas fa-ticket-alt"></i> '+t('viewTicket')+'</button>';if(isAdmin&&reg.status==='Pending'){html+='<button class="btn btn-success btn-sm" onclick="closeModal(\'myBookingsModal\');adminConfirmBooking(\''+reg.id+'\')" style="background:var(--success);color:white"><i class="fas fa-check"></i> '+t('confirm')+'</button>'}html+='<button class="btn btn-outline btn-sm" onclick="cancelBooking(\''+reg.id+'\')"><i class="fas fa-times"></i> '+t('cancel')+'</button>';html+='</div></div>'});$('myBookingsBody').innerHTML=html;openModal('myBookingsModal')}
 function showTicket(regId){var reg=DB.eventRegistrations.find(function(r){return r.id===regId});if(!reg)return;var event=DB.events.find(function(e){return e.id===reg.eventId});if(!event)return;var html='<div class="ticket-card" id="printableTicket">';var _tLogo=(DB.settings&&DB.settings.logoData)||'';html+='<div style="font-size:1.5rem;font-weight:700;color:var(--primary);margin-bottom:4px">'+((DB.settings&&DB.settings.orgName)||'JDC')+'</div>';if(_tLogo)html+='<img src="'+_tLogo+'" class="ticket-logo" alt="JDC" style="max-height:60px">';html+='<div class="ticket-title">'+esc(event.name)+'</div>';html+='<div class="ticket-no">'+t('ticketNumber')+': '+reg.ticketNo+'</div>';html+='<div class="ticket-divider"></div>';html+='<div class="ticket-info">';html+='<div><i class="fas fa-calendar"></i> '+formatDate(event.date)+'</div>';html+='<div><i class="fas fa-clock"></i> '+event.time+'</div>';html+='<div><i class="fas fa-map-marker-alt"></i> '+esc(event.venue)+'</div>';html+='<div><i class="fas fa-user"></i> '+esc(reg.members[0].name)+'</div>';html+='<div><i class="fas fa-users"></i> '+t('totalSeats')+': '+reg.totalSeats+'</div>';html+='<div><i class="fas fa-check-circle"></i> '+t('status')+': '+reg.status+'</div>';html+='</div>';if(reg.members.length>1){html+='<div class="ticket-members"><h4>'+t('familyMembers')+'</h4>';reg.members.slice(1).forEach(function(m){html+='<span class="ticket-member-tag">'+esc(m.name)+' ('+m.ageGroup+')</span>'});html+='</div>'}html+='<div class="ticket-barcode"><div>'+reg.ticketNo+'</div></div>';html+='</div>';$('ticketBody').innerHTML=html;openModal('ticketModal')}
 function updateFamilyMember(index,field,value){currentFamilyMembers[index][field]=value}
@@ -5569,9 +5580,9 @@ function openMyProfile(){var user=DB.currentUser;if(!user)return;var modal=$('pr
 function saveMyProfile(){var user=DB.currentUser;if(!user)return;var nameEl=$('profileEditName'),mobileEl=$('profileEditMobile'),emailEl=$('profileEditEmail'),natEl=$('profileEditNationality'),groupEl=$('profileEditClassGroup'),genderEl=$('profileEditGender'),classIdEl=$('profileEditClassID');if(!nameEl||!mobileEl){showToast('Profile form is not available','error');return}var name=nameEl.value.trim();var mobile=mobileEl.value.trim();if(!name||!mobile){showToast('Name and mobile are required','error');return}var exists=DB.users.find(function(u){return u.id!==user.id&&u.mobile===mobile});if(exists){showToast('This mobile number is already in use','error');return}user.name=name;user.mobile=mobile;if(emailEl)user.email=emailEl.value.trim();if(natEl)user.nationality=natEl.value;if(groupEl)user.classGroup=groupEl.value;if(genderEl)user.gender=genderEl.value;if(classIdEl)user.classID=classIdEl.value.trim();DB.currentUser=user;saveDBLocalOnly();addAudit('PROFILE_UPDATE',user.role+' '+user.name+' updated their profile');fbSaveRecord('users',user,'Profile updated ✅',null);var modal=$('profileEditModal');if(modal)closeModal('profileEditModal');else closeModal('profileModal');if(typeof renderDashboard==='function')renderDashboard()}
 function showProfile(){var user=DB.currentUser;if(!user)return;var html='';html+='<div style="text-align:center;margin-bottom:20px"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;margin:0 auto 12px">'+user.name.charAt(0)+'</div><h3 style="font-size:1.1rem">'+esc(user.name)+'</h3><p style="font-size:0.8rem;color:var(--text-light)">'+user.role+'</p></div>';html+='<div class="form-group"><label class="form-label" data-i18n="fullName"></label><input type="text" class="form-input" id="profileName" value="'+esc(user.name)+'"></div>';html+='<div class="form-group"><label class="form-label" data-i18n="mobileNumber"></label><input type="tel" class="form-input" id="profileMobile" value="'+user.mobile+'"></div>';html+='<div class="form-group"><label class="form-label" data-i18n="email"></label><input type="email" class="form-input" id="profileEmail" value="'+(user.email||'')+'"></div>';if(user.role==='Student'){html+='<div class="form-group"><label class="form-label" data-i18n="classGroup"></label><input type="text" class="form-input" value="'+user.classGroup+'" readonly></div>';if(user.classID){html+='<div class="form-group"><label class="form-label" data-i18n="classID"></label><input type="text" class="form-input" value="'+esc(user.classID)+'" readonly style="font-family:monospace;color:var(--primary);font-weight:600"></div>'}html+='<div class="form-group"><label class="form-label" data-i18n="nationality"></label><input type="text" class="form-input" value="'+(user.nationality||'')+'" readonly></div>';html+='<div class="form-group"><label class="form-label" data-i18n="teacher"></label><input type="text" class="form-input" value="'+getTeacherName(user.teacher)+'" readonly></div>'}html+='<div class="form-group"><label class="form-label" data-i18n="newPassword"></label><input type="password" class="form-input" id="profileNewPassword" placeholder="Leave blank to keep current"></div>';if(user.role==='Admin'){html+='<div style="margin-top:16px;text-align:center"><button class="btn btn-outline btn-sm" onclick="closeModal(\'profileModal\');showSettings()"><i class="fas fa-cog"></i> <span data-i18n="settings"></span></button></div>'}$('profileBody').innerHTML=html;openModal('profileModal');applyTranslations()}
 function saveProfile(){var user=DB.currentUser;if(!user)return;user.name=$('profileName').value.trim();user.mobile=$('profileMobile').value.trim();user.email=$('profileEmail').value.trim();var np=$('profileNewPassword').value;if(np){if(np.length<6){showToast(t('passwordMin6'),'error');return}user.password=np}saveDB();showToast(t('updated'),'success');closeModal('profileModal');renderDashboard()}
-function showNotifications(){var html='';if(DB.notifications.length===0)html+=emptyState('noNotifications');else{DB.notifications.forEach(function(n,idx){var navTarget=n.targetPage||getNotifTarget(n.title);html+='<div class="list-item" style="border-bottom:1px solid var(--border);cursor:pointer" onclick="handleNotifClick('+idx+',\''+navTarget+'\')">';html+='<div class="list-avatar" style="background:'+(n.read?'var(--text-light)':'var(--accent)')+'"><i class="fas fa-bell"></i></div>';html+='<div class="list-content"><div class="list-title">'+esc(n.title)+'</div><div class="list-subtitle">'+esc(n.message)+'</div></div>';html+='<div class="list-meta">'+formatDate(n.date)+'</div></div>'});saveDB()}$('notificationsBody').innerHTML=html;openModal('notificationsPanel');updateNotifBadge()}
+function showNotifications(){var user=DB.currentUser;var mine=myNotifications().slice().reverse();var html='<div style="text-align:right;margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="closeModal(\'notificationsPanel\');navigateTo(\'notifPrefs\')"><i class="fas fa-sliders-h"></i> Notification Settings</button></div>';if(mine.length===0)html+=emptyState('noNotifications');else{mine.forEach(function(n){var navTarget=n.page||getNotifTarget(n.title);var read=notifIsRead(n,user);html+='<div class="list-item" style="border-bottom:1px solid var(--border);cursor:pointer" onclick="handleNotifClick(\''+n.id+'\',\''+navTarget+'\')">';html+='<div class="list-avatar" style="background:'+(read?'var(--text-light)':'var(--accent)')+'"><i class="fas fa-bell"></i></div>';html+='<div class="list-content"><div class="list-title">'+esc(n.title)+'</div><div class="list-subtitle">'+esc(n.body||n.message||'')+'</div></div>';html+='<div class="list-meta">'+formatDate(n.date)+'</div></div>'})}$('notificationsBody').innerHTML=html;openModal('notificationsPanel');updateNotifBadge()}
 function getNotifTarget(title){var t=title.toLowerCase();if(t.indexOf('assignment')>=0)return 'assignments';if(t.indexOf('event')>=0)return 'events';if(t.indexOf('class')>=0||t.indexOf('schedule')>=0)return 'onlineClasses';if(t.indexOf('message')>=0)return 'messages';if(t.indexOf('result')>=0||t.indexOf('grade')>=0)return 'results';if(t.indexOf('certificate')>=0)return 'showMyCertificates';return 'dashboard'}
-function handleNotifClick(idx,target){var n=DB.notifications[idx];if(n&&!n.read){n.read=true;saveDB();updateNotifBadge()}closeModal('notificationsPanel');if(target==='showMyCertificates')showMyCertificates();else navigateTo(target)}
+function handleNotifClick(notifId,target){markNotifRead(notifId);closeModal('notificationsPanel');if(target==='showMyCertificates')showMyCertificates();else navigateTo(target)}
 function showAdminStudents(){var html='<div class="section-header"><h3 data-i18n="allStudents"></h3><button class="btn btn-primary btn-sm" onclick="openStudentModal()"><i class="fas fa-plus"></i> Add</button></div>';html+='<div class="search-bar"><i class="fas fa-search"></i><input type="text" placeholder="'+t('search')+'" onkeyup="searchStudents(this.value)"></div>';html+='<div id="studentSearchResults">';var students=DB.users.filter(function(u){return u.role==='Student'});html+=renderStudentList(students);html+='</div>';$("mainContent").innerHTML=html;applyTranslations()}
 function showAdminTeachers(){openTeacherMgmt()}
 function renderTeacherList(teachers){var html='<div class="card">';if(teachers.length===0)html+=emptyState('noUsers');else teachers.forEach(function(t){html+=renderUserRow(t,true)});html+='</div>';return html}
@@ -5706,6 +5717,7 @@ function approveCertificate(certId){
   cert.approvedBy=DB.currentUser?DB.currentUser.id:'';
   addAudit('CERT_APPROVE','Approved: '+cert.type);
   fbSaveRecord('certificates',cert,'Certificate approved ✅',renderCertificateApproval);
+  pushNotification('🎓 Certificate Approved','Your '+cert.type+' certificate has been approved! You can now download it.','certificates','showMyCertificates',[cert.studentId]);
 }
 function publishCertificate(certId){
   var cert=DB.certificates.find(function(c){return c.id===certId});
@@ -5718,7 +5730,7 @@ function publishCertificate(certId){
 function rejectCertificate(certId){var cert=DB.certificates.find(function(c){return c.id===certId});if(!cert)return;cert.status='Rejected';saveDB();showToast(t('certificateRejected'),'warning');addAudit('CERT_REJECT','Rejected certificate: '+cert.type);renderCertificateApproval()}
 
 // ===================== EVENT REGISTRATION STATUS =====================
-function updateRegistrationStatus(regId,newStatus){var reg=DB.eventRegistrations.find(function(r){return r.id===regId});if(!reg)return;reg.status=newStatus;saveDB();showToast(t('statusUpdated')+': '+newStatus,'success');addAudit('REG_STATUS','Updated registration '+reg.ticketNo+' to '+newStatus);var student=DB.users.find(function(u){return u.id===reg.studentId});if(student){DB.notifications.push({id:generateId('N'),title:'Registration '+newStatus,message:'Your event registration (Ticket: '+reg.ticketNo+') has been '+newStatus+'.',date:new Date().toISOString().slice(0,10),read:false,targetPage:'events'});saveDB();updateNotifBadge()}renderEvents()}
+function updateRegistrationStatus(regId,newStatus){var reg=DB.eventRegistrations.find(function(r){return r.id===regId});if(!reg)return;reg.status=newStatus;saveDB();showToast(t('statusUpdated')+': '+newStatus,'success');addAudit('REG_STATUS','Updated registration '+reg.ticketNo+' to '+newStatus);var student=DB.users.find(function(u){return u.id===reg.studentId});if(student){pushNotification('Registration '+newStatus,'Your event registration (Ticket: '+reg.ticketNo+') has been '+newStatus+'.','events','events',[student.id]);}renderEvents()}
 function showAllRegistrations(){var user=DB.currentUser;var regs=DB.eventRegistrations;var html='<div style="margin-bottom:10px;display:flex;align-items:center;justify-content:space-between"><h3 style="font-size:0.95rem;margin:0">'+t('allRegistrations')+' ('+regs.length+')</h3></div>';if(regs.length===0){html+=emptyState('noRegistrations')}else{regs.forEach(function(reg){var event=DB.events.find(function(e){return e.id===reg.eventId});var student=DB.users.find(function(u){return u.id===reg.studentId});var stCls=reg.status==='Confirmed'?'active':(reg.status==='Pending'?'pending':(reg.status==='Payment Required'?'warning':(reg.status==='Waiting'?'info':'inactive')));html+='<div class="booking-card" style="margin-bottom:12px">';html+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';html+='<div style="flex:1">';html+='<div class="booking-title">'+(event?esc(event.name):'?')+'</div>';html+='<div class="booking-meta" style="cursor:pointer" onclick="viewParticipantDetail(\''+reg.id+'\')"><i class="fas fa-user" style="color:var(--primary)"></i> <strong style="color:var(--primary);text-decoration:underline">'+(student?esc(student.name):'?')+'</strong> | <i class="fas fa-ticket-alt"></i> '+reg.ticketNo+' | <i class="fas fa-users"></i> '+reg.totalSeats+' '+t('seats')+'</div>';html+='<span class="ass-status badge-'+stCls+'" style="margin-top:6px;display:inline-block">'+reg.status+'</span>';html+='</div>';html+='</div>';if(user.role==='Admin'){html+='<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">';var statuses=[{v:'Confirmed',l:t('confirmed'),c:'var(--success)'},{v:'Pending',l:t('pending'),c:'var(--warning)'},{v:'Waiting',l:'Waiting List',c:'var(--info)'},{v:'Payment Required',l:t('paymentRequired'),c:'var(--accent)'}];statuses.forEach(function(st){var isActive=reg.status===st.v;html+='<button class="btn btn-sm" onclick="updateRegistrationStatus(\''+reg.id+'\',\''+st.v+'\')" style="font-size:0.7rem;padding:5px 10px;background:'+(isActive?st.c:'var(--bg)')+';color:'+(isActive?'white':'var(--text)')+';border:1.5px solid '+st.c+'">'+(isActive?'<i class="fas fa-check"></i> ':'')+st.l+'</button>'});html+='</div>'}html+='</div>'})}var rb=document.getElementById('allRegsBody');if(rb){rb.innerHTML=html;window._currentPage='allRegistrations';openModal('allRegsModal');}else{$('mainContent').innerHTML=html;}}
 function viewParticipantDetail(regId){var reg=DB.eventRegistrations.find(function(r){return r.id===regId});if(!reg)return;var event=DB.events.find(function(e){return e.id===reg.eventId});var student=DB.users.find(function(u){return u.id===reg.studentId});var family=reg.family||[];var stCls=reg.status==='Confirmed'?'active':(reg.status==='Pending'?'pending':(reg.status==='Payment Required'?'warning':(reg.status==='Waiting'?'info':'inactive')));var html='<div style="text-align:center;margin-bottom:16px">';html+='<div style="font-size:3rem;color:var(--primary)"><i class="fas fa-user-circle"></i></div>';html+='<h3 style="margin-top:8px">'+(student?esc(student.name):'Unknown')+'</h3>';html+='<p style="font-size:0.85rem;color:var(--text-light)">'+(student?(student.nationality||'')+' | '+esc(student.mobile||''):'')+'</p>';html+='</div>';html+='<div style="background:var(--bg);padding:14px;border-radius:var(--radius-sm);margin-bottom:12px">';html+='<h4 style="font-size:0.85rem;color:var(--primary);margin-bottom:8px"><i class="fas fa-calendar-alt"></i> '+(event?esc(event.name):'')+'</h4>';html+='<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:4px"><i class="fas fa-ticket-alt"></i> '+t('ticketNumber')+': <strong>'+reg.ticketNo+'</strong></div>';html+='<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:4px"><i class="fas fa-users"></i> '+t('seats')+': <strong>'+reg.totalSeats+'</strong></div>';if(reg.nusukRef){html+='<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:4px"><i class="fas fa-passport" style="color:var(--primary)"></i> <strong style="color:var(--primary)">'+t('nusukReference')+':</strong> <span style="font-family:monospace;font-weight:600">'+esc(reg.nusukRef)+'</span></div>'}if(event){html+='<div style="font-size:0.8rem;color:var(--text-light);margin-bottom:4px"><i class="fas fa-calendar"></i> '+formatDate(event.date)+' | <i class="fas fa-clock"></i> '+event.time+'</div>';html+='<div style="font-size:0.8rem;color:var(--text-light)"><i class="fas fa-map-marker-alt"></i> '+esc(event.venue)+'</div>'}html+='</div>';if(family.length>0){html+='<div style="margin-bottom:12px"><h4 style="font-size:0.85rem;color:var(--primary);margin-bottom:6px"><i class="fas fa-users"></i> '+t('familyMembers')+' ('+family.length+')</h4>';family.forEach(function(f){html+='<div style="font-size:0.8rem;padding:4px 0;border-bottom:1px solid var(--border)"><i class="fas fa-user"></i> '+esc(f.name)+' ('+f.relation+', '+f.gender+')</div>'});html+='</div>'}html+='<div style="margin-bottom:12px"><h4 style="font-size:0.85rem;color:var(--primary);margin-bottom:8px"><i class="fas fa-exchange-alt"></i> '+t('updateStatus')+'</h4>';html+='<div style="display:flex;gap:6px;flex-wrap:wrap">';var statuses=[{v:'Confirmed',l:t('confirmed'),c:'var(--success)'},{v:'Pending',l:t('pending'),c:'var(--warning)'},{v:'Waiting',l:'Waiting List',c:'var(--info)'},{v:'Payment Required',l:t('paymentRequired'),c:'var(--accent)'}];statuses.forEach(function(st){var isActive=reg.status===st.v;html+='<button class="btn btn-sm" onclick="updateRegStatusFromModal(\''+reg.id+'\',\''+st.v+'\')" style="font-size:0.75rem;padding:6px 12px;background:'+(isActive?st.c:'var(--bg)')+';color:'+(isActive?'white':'var(--text)')+';border:1.5px solid '+st.c+'">'+(isActive?'<i class="fas fa-check"></i> ':'')+st.l+'</button>'});html+='</div></div>';if(reg.status==='Confirmed'){html+='<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">';html+='<button class="share-btn whatsapp" onclick="shareTicketWhatsApp(\''+reg.id+'\')"><i class="fab fa-whatsapp"></i> '+t('shareViaWhatsApp')+'</button>';html+='<button class="share-btn email" onclick="shareTicketEmail(\''+reg.id+'\')"><i class="fas fa-envelope"></i> '+t('shareViaEmail')+'</button>';html+='</div>'}$('participantBody').innerHTML=html;openModal('participantModal')}
 function updateRegStatusFromModal(regId,newStatus){updateRegistrationStatus(regId,newStatus);closeModal('participantModal');showAllRegistrations()}
@@ -5733,10 +5745,10 @@ function doBulkDelete(category){if(category==='students')DB.users=DB.users.filte
 // ===================== SEND NOTIFICATION =====================
 function openSendNotification(){$('notifTitle').value='';$('notifMessage').value='';$('notifViaEmail').checked=true;$('notifViaWhatsApp').checked=true;$('notifRecipients').value='all';$('notifIndividualWrap').style.display='none';var sel=$('notifIndividual');sel.innerHTML='';DB.users.forEach(function(u){if(u.id!=='admin'){var opt=document.createElement('option');opt.value=u.id;opt.textContent=u.name+' ('+u.role+')';sel.appendChild(opt)}});$('sendNotifModal').classList.remove('hidden');openModal('sendNotifModal')}
 $('notifRecipients').addEventListener('change',function(){$('notifIndividualWrap').style.display=this.value==='individual'?'block':'none'});
-function sendNotification(){var title=$('notifTitle').value.trim();var message=$('notifMessage').value.trim();var target=$('notifTarget').value;var recipients=$('notifRecipients').value;if(!title||!message){showToast(t('fillRequired'),'error');return}var viaEmail=$('notifViaEmail').checked;var viaWhatsApp=$('notifViaWhatsApp').checked;var targetUsers=[];if(recipients==='all')targetUsers=DB.users.filter(function(u){return u.id!==DB.currentUser.id});else if(recipients==='students')targetUsers=DB.users.filter(function(u){return u.role==='Student'});else if(recipients==='teachers')targetUsers=DB.users.filter(function(u){return u.role==='Teacher'});else if(recipients==='individual'){var uid=$('notifIndividual').value;var u=DB.users.find(function(x){return x.id===uid});if(u)targetUsers=[u]}targetUsers.forEach(function(u){DB.notifications.push({id:generateId('N'),title:title,message:message,date:new Date().toISOString().slice(0,10),read:false,targetPage:target});if(viaEmail&&u.email)console.log('[EMAIL to '+u.email+'] '+title+': '+message);if(viaWhatsApp&&u.mobile)console.log('[WHATSAPP to '+u.mobile+'] '+title+': '+message)});// Save each notification to Firestore for real-time delivery
-targetUsers.forEach(function(u){
-  pushNotification(title, message, target||'announcements', target||'dashboard', [u.id]);
-});
+function sendNotification(){var title=$('notifTitle').value.trim();var message=$('notifMessage').value.trim();var page=$('notifTarget').value||'dashboard';var recipients=$('notifRecipients').value;if(!title||!message){showToast(t('fillRequired'),'error');return}var viaEmail=$('notifViaEmail').checked;var viaWhatsApp=$('notifViaWhatsApp').checked;var targetUsers=[];var targetValue='all';if(recipients==='all'){targetUsers=DB.users.filter(function(u){return u.id!==DB.currentUser.id});targetValue='all'}else if(recipients==='students'){targetUsers=DB.users.filter(function(u){return u.role==='Student'});targetValue='students'}else if(recipients==='teachers'){targetUsers=DB.users.filter(function(u){return u.role==='Teacher'});targetValue='teachers'}else if(recipients==='individual'){var uid=$('notifIndividual').value;var u=DB.users.find(function(x){return x.id===uid});if(u)targetUsers=[u];targetValue=uid?[uid]:[]}targetUsers.forEach(function(u){if(viaEmail&&u.email)console.log('[EMAIL to '+u.email+'] '+title+': '+message);if(viaWhatsApp&&u.mobile)console.log('[WHATSAPP to '+u.mobile+'] '+title+': '+message)});
+// Single Firestore-backed notification — real-time sync + the Cloud Function
+// (deliverNotificationPush) handle showing it to each recipient.
+pushNotification(title, message, 'announcements', page, targetValue);
 updateNotifBadge();showToast(t('notificationSent')+' ('+targetUsers.length+' '+t('recipients')+')','success');addAudit('NOTIF_SEND','Sent: '+title);closeModal('sendNotifModal')}
 
 // ===================== OTP DISPLAY FIX =====================
@@ -5954,7 +5966,7 @@ function closeBroadcastModal(){closeModal('broadcastModal')}
 function onBroadcastTargetChange(val){$('bcGroupWrap').style.display=val==='group'?'block':'none';$('bcIndividualWrap').style.display=val==='individual'?'block':'none';if(val==='individual'){var sel=$('bcUserSelect');if(sel){sel.innerHTML='<option value="">-- Select User --</option>';DB.users.filter(function(u){return u.role!=='Admin'}).sort(function(a,b){return a.name.localeCompare(b.name)}).forEach(function(u){var opt=document.createElement('option');opt.value=u.id;opt.textContent=u.name+' ('+u.role+') - '+u.mobile;sel.appendChild(opt)})}}else{$('bcSelectedUserWrap').style.display='none';$('bcSelectedUserId').value='';currentBcTargetUserId=''}}
 function onBroadcastUserSelect(userId){if(!userId){$('bcSelectedUserWrap').style.display='none';$('bcSelectedUserId').value='';currentBcTargetUserId='';return}var user=DB.users.find(function(u){return u.id===userId});if(user){$('bcSelectedUserId').value=userId;currentBcTargetUserId=userId;$('bcSelectedUser').textContent=user.name+' ('+user.role+')';$('bcSelectedUserWrap').style.display='block'}}
 function searchBroadcastUsers(query){var list=$('bcUserList');if(!query){list.innerHTML='';return}var users=DB.users.filter(function(u){return u.id!=='admin'&&(u.name.toLowerCase().indexOf(query.toLowerCase())>=0||u.mobile.indexOf(query)>=0)});if(users.length===0){list.innerHTML='<div class="broadcast-user-item">No users found</div>';return}list.innerHTML='';users.forEach(function(u){var div=document.createElement('div');div.className='broadcast-user-item';div.textContent=u.name+' ('+u.role+') - '+u.mobile;div.onclick=function(){$('bcSelectedUserId').value=u.id;currentBcTargetUserId=u.id;$('bcSelectedUser').textContent=u.name+' ('+u.role+')';$('bcSelectedUserWrap').style.display='block';list.innerHTML='';$('bcSearchUser').value=''};list.appendChild(div)})}
-function sendBroadcast(){var title=$('bcTitle').value.trim();var message=$('bcMessage').value.trim();var target=$('bcTarget').value;if(!title||!message){showToast(t('fillRequired'),'error');return}var recipients=[];if(target==='all')recipients=DB.users.filter(function(u){return u.id!=='admin'});else if(target==='students')recipients=DB.users.filter(function(u){return u.role==='Student'});else if(target==='teachers')recipients=DB.users.filter(function(u){return u.role==='Teacher'});else if(target==='group'){var g=$('bcGroup').value;recipients=DB.users.filter(function(u){return u.classGroup===g})}else if(target==='individual'){var uid=$('bcSelectedUserId').value;var u=DB.users.find(function(x){return x.id===uid});if(u)recipients=[u]}if(recipients.length===0){showToast(t('noRecipients'),'warning');return}recipients.forEach(function(u){DB.notifications.push({id:generateId('N'),title:title,message:message,date:new Date().toISOString().slice(0,10),read:false,targetPage:'dashboard'})});saveDB();updateNotifBadge();showToast('Announcement sent to '+recipients.length+' recipients','success');addAudit('BROADCAST','Sent: '+title+' to '+recipients.length);closeBroadcastModal()}
+function sendBroadcast(){var title=$('bcTitle').value.trim();var message=$('bcMessage').value.trim();var target=$('bcTarget').value;if(!title||!message){showToast(t('fillRequired'),'error');return}var recipients=[];var targetValue='all';if(target==='all'){recipients=DB.users.filter(function(u){return u.id!=='admin'});targetValue='all'}else if(target==='students'){recipients=DB.users.filter(function(u){return u.role==='Student'});targetValue='students'}else if(target==='teachers'){recipients=DB.users.filter(function(u){return u.role==='Teacher'});targetValue='teachers'}else if(target==='group'){var g=$('bcGroup').value;recipients=DB.users.filter(function(u){return u.classGroup===g});targetValue=recipients.map(function(u){return u.id})}else if(target==='individual'){var uid=$('bcSelectedUserId').value;var u=DB.users.find(function(x){return x.id===uid});if(u)recipients=[u];targetValue=uid?[uid]:[]}if(recipients.length===0){showToast(t('noRecipients'),'warning');return}pushNotification(title,message,'announcements','dashboard',targetValue);updateNotifBadge();showToast('Announcement sent to '+recipients.length+' recipients','success');addAudit('BROADCAST','Sent: '+title+' to '+recipients.length);closeBroadcastModal()}
 function clearBroadcastForm(){$('bcTitle').value='';$('bcMessage').value='';$('bcTarget').value='all';$('bcGroupWrap').style.display='none';$('bcIndividualWrap').style.display='none';$('bcSelectedUserWrap').style.display='none';$('bcSelectedUserId').value='';currentBcTargetUserId='';$('bcSearchUser').value='';$('bcUserList').innerHTML=''}
 
 // ===================== FEATURE 4: ASSIGNMENT RECORDING OPTIONAL =====================
