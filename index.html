@@ -2706,7 +2706,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.06.30.2';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.06.30.3';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -4248,21 +4248,24 @@ function showOfflineBanner(show){
 }
 
 function checkForAppUpdate(){
-  fetch(location.pathname+'?_v='+Date.now(),{cache:'no-store'})
+  fetch(location.pathname+'?_v='+Date.now(),{
+    cache:'no-store',
+    headers:{'Cache-Control':'no-cache, no-store, must-revalidate','Pragma':'no-cache'}
+  })
     .then(function(r){return r.text();})
     .then(function(html){
       var m=html.match(/APP_VERSION='([^']+)'/);
       if(m&&m[1]!==APP_VERSION){
+        console.log('[Update] New version detected on server: '+m[1]+' (current: '+APP_VERSION+')');
         var hasOpenModal=!!document.querySelector('.modal-overlay.active');
         var page=window._currentPage||window.currentPage||'dashboard';
-        // Auto-reload silently if it's safe (no modal open, on dashboard/read-only page)
         var safePages=['dashboard','events','assignments','messages','certificates'];
         if(!hasOpenModal&&safePages.indexOf(page)>=0&&!window._autoUpdateScheduled){
           window._autoUpdateScheduled=true;
           console.log('[Update] Safe to auto-refresh, applying update silently in 3s...');
           setTimeout(function(){
             if(!document.querySelector('.modal-overlay.active')){
-              location.reload(true);
+              location.href=location.pathname+'?_freshv='+Date.now();
             } else {
               window._autoUpdateScheduled=false;
               showUpdateBanner();
@@ -4272,14 +4275,23 @@ function checkForAppUpdate(){
           showUpdateBanner();
         }
       }
-    }).catch(function(){});
+    }).catch(function(err){console.warn('[Update] check failed:',err.message);});
 }
 function showUpdateBanner(){
   if(document.getElementById('appUpdateBanner'))return;
   var b=document.createElement('div');
   b.id='appUpdateBanner';
   b.style.cssText='position:fixed;bottom:70px;left:16px;right:16px;background:var(--primary);color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:99997;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.85rem';
-  b.innerHTML='<span><i class="fas fa-sync"></i> New version available</span><button onclick="location.reload(true)" style="background:#fff;color:var(--primary);border:none;padding:6px 14px;border-radius:8px;font-weight:600;cursor:pointer">Update Now</button>';
+  var span=document.createElement('span');
+  span.innerHTML='<i class="fas fa-sync"></i> New version available';
+  var btn=document.createElement('button');
+  btn.textContent='Update Now';
+  btn.style.cssText='background:#fff;color:var(--primary);border:none;padding:6px 14px;border-radius:8px;font-weight:600;cursor:pointer';
+  btn.addEventListener('click',function(){
+    location.href=location.pathname+'?_freshv='+Date.now();
+  });
+  b.appendChild(span);
+  b.appendChild(btn);
   document.body.appendChild(b);
 }
 
@@ -6062,6 +6074,7 @@ document.addEventListener('DOMContentLoaded',async function(){
   }
   try{startAutoSync();}catch(e){}
   setInterval(checkForAppUpdate,60000);
+  setTimeout(checkForAppUpdate,5000);
   document.addEventListener('visibilitychange',function(){
     if(!document.hidden)checkForAppUpdate();
   });
