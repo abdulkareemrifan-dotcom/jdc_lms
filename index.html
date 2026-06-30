@@ -5096,6 +5096,7 @@ function renderMessages(){
   html+='<button data-tab="inbox" onclick="window._msgTab=this.getAttribute(\'data-tab\');renderMessages()" style="padding:8px 20px;border:none;background:none;cursor:pointer;font-weight:600;'+(tab==='inbox'?'color:var(--primary);border-bottom:2px solid var(--primary)':'color:var(--text-light)')+'"><i class="fas fa-inbox"></i> Inbox ('+inbox.length+')</button>';
   html+='<button data-tab="sent" onclick="window._msgTab=this.getAttribute(\'data-tab\');renderMessages()" style="padding:8px 20px;border:none;background:none;cursor:pointer;font-weight:600;'+(tab==='sent'?'color:var(--primary);border-bottom:2px solid var(--primary)':'color:var(--text-light)')+'"><i class="fas fa-paper-plane"></i> Sent ('+sent.length+')</button>';
   html+='</div>';
+  html+='<button onclick="openComposeMessage()" title="Compose" style="position:fixed;bottom:calc(var(--bottom-nav-height) + 12px);left:12px;width:48px;height:48px;border-radius:50%;background:var(--primary);color:white;border:none;font-size:1.2rem;cursor:pointer;box-shadow:0 4px 12px rgba(9,89,150,0.4);z-index:100;display:flex;align-items:center;justify-content:center"><i class="fas fa-pen"></i></button>';
   var msgs=tab==='sent'?sent:inbox;
   if(!msgs.length){html+='<div class="card"><div class="card-body"><div style="text-align:center;padding:30px;color:var(--text-light)"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:8px;display:block;opacity:0.3"></i>No messages</div></div></div>';$('mainContent').innerHTML=html;applyTranslations();return;}
   html+='<div class="card"><div class="card-body" style="padding:0">';
@@ -5103,7 +5104,8 @@ function renderMessages(){
     var isRead=(msg.readBy&&msg.readBy.includes(uid))||msg.read;
     html+='<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);background:'+(isRead?'transparent':'var(--bg)')+'">';
     html+='<div class="list-avatar" style="background:'+(tab==='sent'?'var(--primary)':'var(--accent)')+'"><i class="fas fa-'+(tab==='sent'?'paper-plane':'envelope')+'"></i></div>';
-    html+='<div style="flex:1;cursor:pointer" data-mid="'+msg.id+'" onclick="openMessageThread(this.getAttribute(\'data-mid\'))">';
+    var otherId=(tab==='sent')?(msg.to||msg.recipientId||''):(msg.from||msg.senderId||'');
+    html+='<div style="flex:1;cursor:pointer" data-oid="'+esc(otherId)+'" data-mid="'+msg.id+'" onclick="markMessageRead(this.getAttribute(\'data-mid\'));openMessageThread(this.getAttribute(\'data-oid\'))">';
     html+='<div style="font-weight:'+(isRead?'400':'700')+'">'+esc(msg.subject||'(no subject)')+'</div>';
     html+='<div style="font-size:0.75rem;color:var(--text-light)">'+(tab==='sent'?'To: '+esc(msg.recipientName||''):'From: '+esc(msg.senderName||''))+'</div>';
     html+='<div style="font-size:0.7rem;color:var(--text-light)">'+formatDate(msg.date)+'</div></div>';
