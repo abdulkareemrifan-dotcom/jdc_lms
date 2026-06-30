@@ -438,7 +438,7 @@ window.addEventListener('load', function() {
 <body>
 <script>
 // Early shims - replaced by full functions once main script loads
-function hideDua(){var ds=document.getElementById('duaScreen');var as=document.getElementById('authScreen');if(ds)ds.classList.add('hidden');if(as)as.classList.remove('hidden');}
+function hideDua(){var ds=document.getElementById('duaScreen');var as=document.getElementById('authScreen');if(ds)ds.classList.add('hidden');if(as)as.classList.remove('hidden');try{sessionStorage.setItem('jdc_dua_seen','1');}catch(e){}}
 function showDua(){var ds=document.getElementById('duaScreen');if(ds)ds.classList.remove('hidden');}
 window.showDua=showDua;
 
@@ -574,7 +574,14 @@ window.showDua=showDua;
     <div class="form-group"><label class="form-label"><span data-i18n="classGroup"></span> <span class="req">*</span></label><select class="form-select" id="studentClassGroup"><option value="">Select</option><option>Children</option><option>Teenage</option><option>Adult</option></select></div>
     <div class="form-group"><label class="form-label"><span data-i18n="gender"></span> <span class="req">*</span></label><select class="form-select" id="studentGender"><option value="">Select</option><option>Male</option><option>Female</option></select></div>
     <div class="form-group"><label class="form-label" data-i18n="teacher"></label><select class="form-select" id="studentTeacher"><option value="">Select Teacher</option></select></div>
-    <div class="form-group"><label class="form-label" data-i18n="status"></label><select class="form-select" id="studentStatus"><option>Active</option><option>Inactive</option></select></div>
+    <div class="form-group"><label class="form-label" data-i18n="status"></label><select class="form-select" id="studentStatus"><option>Active</option><option>Inactive</option></select>
+      <div class="form-group">
+        <label class="checkbox-label" style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="studentVideoPermission" style="width:18px;height:18px">
+          <span><i class="fas fa-video" style="color:var(--accent)"></i> Allow Video Recording</span>
+        </label>
+        <div class="form-help">Student can record and submit videos when enabled</div>
+      </div></div>
   </div>
   <div class="modal-footer"><button class="btn btn-outline" onclick="clearForm('studentModal')"><i class="fas fa-eraser"></i> Clear</button><button class="btn btn-outline" onclick="saveDraft('studentModal')"><i class="fas fa-save"></i> Save Draft</button><button class="btn btn-outline" onclick="closeModal('studentModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="saveStudent()"><i class="fas fa-save"></i> <span data-i18n="save"></span></button></div>
 </div></div>
@@ -603,6 +610,14 @@ window.showDua=showDua;
     <div class="form-group"><label class="form-label">Classes</label><div style="display:flex;gap:12px"><label class="checkbox-group"><input type="checkbox" id="tacctChild" value="Children"><span>Children</span></label><label class="checkbox-group"><input type="checkbox" id="tacctTeen" value="Teenage"><span>Teenage</span></label><label class="checkbox-group"><input type="checkbox" id="tacctAdlt" value="Adult"><span>Adult</span></label></div></div>
     <div class="form-group"><label class="form-label">Status</label><select class="form-select" id="teacherAcctStatus"><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
   </div>
+  
+    <div class="form-group">
+      <label class="checkbox-label" style="display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="teacherVideoPermission" style="width:18px;height:18px">
+        <span><i class="fas fa-video" style="color:var(--accent)"></i> Allow Video Recording &amp; Broadcast</span>
+      </label>
+      <div class="form-help">Grants access to record/upload videos and send broadcast messages to students</div>
+    </div>
   <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('teacherAccountModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="saveTeacherAcct()"><i class="fas fa-save"></i> Save</button></div>
 </div></div>
 <div id="teacherResetPwModal" class="modal-overlay"><div class="modal-content" style="max-width:400px">
@@ -897,6 +912,28 @@ window.showDua=showDua;
         <label class="form-label">Minimum Pass Percentage (%)</label>
         <input type="number" class="form-input" id="setCertPass" value="60" min="1" max="100" placeholder="60">
         <div class="form-help">Average score needed to earn a certificate</div>
+      </div>
+    </div>
+    
+    <div class="settings-card">
+      <h4 class="settings-section-title"><i class="fas fa-check-double"></i> Event Registration</h4>
+      <div class="form-group">
+        <label class="checkbox-label" style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="setAutoApprove" checked style="width:18px;height:18px">
+          <span>Auto-approve student event registrations</span>
+        </label>
+        <div class="form-help">When enabled, students are automatically confirmed without manual admin approval. Paid events may still require approval.</div>
+      </div>
+    </div>
+    
+    <div class="settings-card">
+      <h4 class="settings-section-title"><i class="fas fa-user-check"></i> Student Registration</h4>
+      <div class="form-group">
+        <label class="checkbox-label" style="display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="setAutoApproveStudents" checked style="width:18px;height:18px">
+          <span>Auto-approve new student registrations</span>
+        </label>
+        <div class="form-help">When enabled, students can login immediately after registering. When disabled, admin must manually approve each student.</div>
       </div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="clearForm('settingsModal')"><i class="fas fa-eraser"></i> Clear</button><button class="btn btn-outline" onclick="saveDraft('settingsModal')"><i class="fas fa-save"></i> Save Draft</button><button class="btn btn-outline" onclick="closeModal('settingsModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> <span data-i18n="save"></span></button></div>
@@ -2326,11 +2363,32 @@ var DB=JSON.parse(JSON.stringify(DB_DEFAULT));
 // ============ FIREBASE FIRESTORE INTEGRATION ============
 var isFirebaseReady=false;
 var _realtimeUnsubs=[];
-var FB_COLLECTIONS={users:'users',weeklyDua:'weeklyDua',duaSubmissions:'duaSubmissions',assignments:'assignments',events:'events',eventRegistrations:'eventRegistrations',submissions:'submissions',results:'results',certificates:'certificates',messages:'messages',notifications:'notifications',onlineClasses:'onlineClasses',feedback:'feedback',attendance:'attendance',settings:'settings'};
+var _lastSyncTime=0;
+var _heartbeatTimer=null;
+var FB_COLLECTIONS={users:'users',studentVideos:'studentVideos',weeklyDua:'weeklyDua',duaSubmissions:'duaSubmissions',assignments:'assignments',events:'events',eventRegistrations:'eventRegistrations',submissions:'submissions',results:'results',certificates:'certificates',messages:'messages',notifications:'notifications',onlineClasses:'onlineClasses',feedback:'feedback',attendance:'attendance',settings:'settings'};
 
 function waitForFirebase(cb){if(window._firebaseReady){isFirebaseReady=true;cb();}else{window._onFirebaseReady=function(){isFirebaseReady=true;cb();};}}
 
-async function fbSet(col,record){if(!window._firebase||!record||!record.id)return false;if(window._firebaseReady)isFirebaseReady=true;try{var clean=JSON.parse(JSON.stringify(record));if(clean.photo&&clean.photo.length>600000)clean.photo='';if(clean.logoData&&clean.logoData.length>600000)clean.logoData='';await window._firebase.setDoc(window._firebase.doc(col,clean.id),clean);return true;}catch(e){console.error('fbSet',col,e);return false;}}
+async function fbSet(col,record){
+  if(!window._firebase||!record||!record.id){
+    window._lastFbSetError='Firebase not initialized or invalid record';
+    return false;
+  }
+  if(window._firebaseReady)isFirebaseReady=true;
+  try{
+    var clean=JSON.parse(JSON.stringify(record));
+    if(clean.photo&&clean.photo.length>600000)clean.photo='';
+    if(clean.logoData&&clean.logoData.length>600000)clean.logoData='';
+    await window._firebase.setDoc(window._firebase.doc(col,clean.id),clean);
+    window._lastFbSetError=null;
+    return true;
+  }catch(e){
+    var errMsg=(e.code?e.code+': ':'')+(e.message||String(e));
+    console.error('[fbSet] FAILED for collection "'+col+'" id "'+record.id+'": '+errMsg);
+    window._lastFbSetError=errMsg;
+    return false;
+  }
+}
 
 async function fbDelete(col,id){if(!isFirebaseReady||!window._firebase||!id)return false;try{await window._firebase.deleteDoc(window._firebase.doc(col,id));return true;}catch(e){console.error('fbDelete',col,id,e);return false;}}
 
@@ -2392,7 +2450,6 @@ async function loadFromFirebase(){
   var savedUser=DB.currentUser;
   try{
     var props=Object.keys(FB_COLLECTIONS);
-    // Load ALL collections in PARALLEL for fast startup
     var promises=props.map(async function(prop){
       var col=FB_COLLECTIONS[prop];
       if(!col)return;
@@ -2414,18 +2471,25 @@ async function loadFromFirebase(){
           var arr=[];
           docs.forEach(function(d){var v=d.data();v.id=d.id;arr.push(v);});
           DB[prop]=arr;
+          if(prop==='users'){
+            console.log('[loadFromFirebase] users collection: '+arr.length+' documents');
+          }
         }
-      }catch(e){console.warn('loadFromFirebase:'+prop,e.message);}
+      }catch(e){
+        console.error('[loadFromFirebase] FAILED for "'+prop+'" ('+col+'): '+e.code+' - '+e.message);
+        if(prop==='users'){
+          window._usersLoadError = (e.code||'')+': '+e.message;
+        }
+      }
     });
     await Promise.all(promises);
     DB.currentUser=savedUser;
-    // Populate dropdowns AFTER all data loaded
     if(typeof populateAssClassGroup==='function')populateAssClassGroup();
     if(typeof applyLogo==='function')applyLogo();
     return true;
   }catch(e){
     DB.currentUser=savedUser;
-    console.error('loadFromFirebase',e);
+    console.error('[loadFromFirebase] outer error:',e);
     return false;
   }
 }
@@ -2461,21 +2525,30 @@ async function forceSyncNow(){
   }catch(e){showToast('Sync error: '+e.message,'error');}
 }
 
-function refreshCurrentPage(){silentRefreshCurrentPage(null);}
+function refreshCurrentPage(prop){silentRefreshCurrentPage(prop||null);}
 
 var _PAGE_COLLECTION_MAP={
-  dashboard:['assignments','events','onlineClasses','results'],
-  assignments:['assignments'],results:['results','submissions'],
+  dashboard:['assignments','events','onlineClasses','results','attendance','submissions','certificates','users'],
+  assignments:['assignments','submissions'],results:['results','submissions'],
   events:['events','eventRegistrations'],onlineClasses:['onlineClasses'],
   messages:['messages'],attendance:['attendance'],
   reports:['assignments','submissions','results','attendance','certificates'],
   certificates:['certificates'],notifPrefs:['notifications'],
   weeklyDua:['weeklyDua','duaSubmissions'],
+  certApproval:['certificates'],allRegistrations:['eventRegistrations'],
 };
 
 function silentRefreshCurrentPage(changedProp){
   applyLogo();
-  if(document.querySelector('.modal-overlay.active')){return;}
+  if(document.querySelector('.modal-overlay.active')){
+    // Exception: if the user's own permission/role data changed, still update
+    // the dashboard underneath so locked buttons unlock immediately
+    if(changedProp==='users'){
+      var pageNow=window._currentPage||window.currentPage||'dashboard';
+      if(pageNow==='dashboard'){try{renderDashboard();}catch(e){}}
+    }
+    return;
+  }
   var page=window._currentPage||window.currentPage||'dashboard';
   if(changedProp==='notifications'){updateNotifBadge();return;}
   if(changedProp){
@@ -2510,13 +2583,13 @@ function startSyncHeartbeat(){
     if(!DB.currentUser)return;
     if(navigator.onLine!==false&&isFirebaseReady&&window._firebase){
       // Only restart if listeners actually dropped
-      if((window._rtListeners||[]).length===0){
+      if((_realtimeUnsubs||[]).length===0){
         console.log('Heartbeat: restarting subscriptions');
         setupRealtimeSubscription();
       }
     }
     // Only pull if no realtime listeners (offline recovery)
-    if(navigator.onLine!==false&&(window._rtListeners||[]).length===0&&Date.now()-_lastSyncTime>30000){
+    if(navigator.onLine!==false&&(_realtimeUnsubs||[]).length===0&&Date.now()-_lastSyncTime>30000){
       _lastSyncTime=Date.now();silentPullFromFirebase();
     }
   },30000);
@@ -2525,7 +2598,7 @@ function startSyncHeartbeat(){
   });
   document.addEventListener('visibilitychange',function(){
     if(!document.hidden&&DB.currentUser&&isFirebaseReady){
-      if((window._rtListeners||[]).length===0)setupRealtimeSubscription();
+      if((_realtimeUnsubs||[]).length===0)setupRealtimeSubscription();
       if(Date.now()-_lastSyncTime>20000){_lastSyncTime=Date.now();silentPullFromFirebase();}
     }
   });
@@ -2555,17 +2628,25 @@ async function silentPullFromFirebase(){
 
 function deleteRecordFromFirebase(col,id){return fbDelete(col,id);}
 function saveRecordToFirebase(col,rec){return fbSet(col,rec);}
-function startAutoSync(){}
-function stopAutoSync(){}
+function startAutoSync(){
+  if(!DB.currentUser)return;
+  setupRealtimeSubscription();
+  if(typeof startSyncHeartbeat==='function')startSyncHeartbeat();
+}
+function stopAutoSync(){
+  cleanupRealtime();
+  if(_heartbeatTimer){clearInterval(_heartbeatTimer);_heartbeatTimer=null;}
+}
 var _realtimeUnsubs=[];
 function setupRealtimeSubscription(){/* debounced per-collection refresh */
   if(!isFirebaseReady||!window._firebase){
     setTimeout(setupRealtimeSubscription,1500);return;
   }
   cleanupRealtime();
+  window._rtListeners=_realtimeUnsubs;
   var arrayProps=['users','assignments','events','eventRegistrations',
     'submissions','results','certificates','messages','notifications',
-    'onlineClasses','feedback','attendance','weeklyDua','duaSubmissions'];
+    'onlineClasses','feedback','attendance','weeklyDua','duaSubmissions','studentVideos'];
   arrayProps.forEach(function(prop){
     var colName=FB_COLLECTIONS[prop];if(!colName)return;
     try{
@@ -2587,7 +2668,7 @@ function setupRealtimeSubscription(){/* debounced per-collection refresh */
             });
           }
           saveDBLocalOnly();
-          refreshCurrentPage();
+          refreshCurrentPage(prop);
         },
         function(err){console.warn('onSnapshot err',prop,err);}
       );
@@ -2624,11 +2705,28 @@ function cleanupRealtime(){
 // Firebase uses native JS objects - no field mapping needed
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
-var DB_VERSION=4;async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var DB_VERSION=4;
+var APP_VERSION='2026.06.30.2';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
-waitForFirebase(async function(){var loaded=await loadFromFirebase();if(loaded){saveDBLocalOnly();if(DB.currentUser){refreshCurrentPage();updateNotifBadge();}}});}
+waitForFirebase(async function(){
+  var loaded=await loadFromFirebase();
+  if(loaded){
+    var hasAdmin2=(DB.users||[]).some(function(u){return u.role==='Admin';});
+    if(!hasAdmin2){
+      var defAdmin=DB_DEFAULT.users.find(function(u){return u.role==='Admin';});
+      if(defAdmin){
+        if(!DB.users)DB.users=[];
+        DB.users.push(defAdmin);
+        fbSet('users',defAdmin).catch(function(){});
+        console.log('[initDatabase] Seeded missing default admin to Firestore');
+      }
+    }
+    saveDBLocalOnly();
+    if(DB.currentUser){refreshCurrentPage();updateNotifBadge();}
+  }
+});}
 
 var currentPage="dashboard";var currentCertId=null;var videoMediaRecorder=null,videoChunks=[],videoBlob=null,isVideoRecording=false,videoTimerInterval=null,videoSeconds=0;
 var currentOTP="";
@@ -2700,6 +2798,7 @@ function closeModal(id){
   el.style.height="";
   el.style.zIndex="";
   el.style.background="";
+  window._studentVideoMode=false;
   el.style.padding="";
   document.body.style.overflow="";
 }
@@ -2724,36 +2823,147 @@ var SESSION_KEY="jdc_session";var OTP_STORE={};
 function hashPassword(pw){var hash=0;if(!pw)return String(hash);for(var i=0;i<pw.length;i++){var c=pw.charCodeAt(i);hash=((hash<<5)-hash)+c;hash=hash&hash}return"h"+Math.abs(hash).toString(36)}
 function startSessionTimeout(){var mins=(DB.settings&&DB.settings.sessionTimeout)||30;var ms=mins*60*1000;clearTimeout(window._sessionTimer);window._sessionTimer=setTimeout(function(){doLogout()},ms)}
 function resetSessionTimer(){startSessionTimeout()}
-function doLogin(){var role=$("loginRole").value;var identifier="";if(role==="Student"){identifier=$("loginMobile").value.trim()}else{identifier=$("loginUsername").value.trim()}var password=$("loginPassword").value;if(!identifier||!password){showToast(t("fillRequired"),"error");return}if(!role){showToast("Please select a role","error");return}var hashedPw=hashPassword(password);var user=null;if(role==="Student"){user=DB.users.find(function(u){return u.role==="Student"&&u.mobile===identifier&&(u.password===hashedPw||u.password===password)})}else if(role==="Teacher"){user=DB.users.find(function(u){return u.role==="Teacher"&&(u.username===identifier||u.mobile===identifier)&&(u.password===hashedPw||u.password===password)})}else if(role==="Admin"){user=DB.users.find(function(u){return u.role==="Admin"&&(u.username===identifier||u.mobile===identifier)&&(u.password===hashedPw||u.password===password)})}if(!user){showToast(t("invalidCredentials"),"error");return}if(user.status==="Inactive"){showToast("Your account is inactive. Please contact admin.","error");return}// Always use freshest user record from DB
-var freshUser=DB.users.find(function(u){return u.id===user.id;})||user;
-DB.currentUser=freshUser;localStorage.setItem(DB_KEY,JSON.stringify(DB));addAudit("LOGIN",role+" "+user.name+" logged in");$("loginMobile").value="";$("loginUsername").value="";$("loginPassword").value="";backToRoleSelector();$("authScreen").classList.add("hidden");$("mainApp").classList.remove("hidden");updateNotifBadge();startSessionTimeout();document.addEventListener("click",resetSessionTimer);document.addEventListener("keydown",resetSessionTimer);if(isFirebaseReady&&window._firebase){
-  loadFromFirebase().then(function(loaded){
-    DB.currentUser=user;
-    if(loaded)saveDBLocalOnly();
-    setupRealtimeSubscription();
-    setTimeout(function(){if(typeof autoMarkAttendance==='function')autoMarkAttendance();},2000);
-    if(typeof startSyncHeartbeat==='function')startSyncHeartbeat();
-    setTimeout(function(){populateAssClassGroup();},500);
-    setTimeout(function(){
-      if(typeof initNotifications==='function')initNotifications();
-      // Auto-prompt for notification permission
-      if(Notification&&Notification.permission==='default'){
-        setTimeout(function(){
-          if(confirm('Enable push notifications to stay updated on assignments, results and messages?')){
-            requestNotifPermission();
-          }
-        },3000);
+async function doLogin(){
+  var role=$("loginRole").value;
+  var identifier="";
+  if(role==="Student"){identifier=$("loginMobile").value.trim();}
+  else{identifier=$("loginUsername").value.trim();}
+  var password=$("loginPassword").value;
+  if(!identifier||!password){showToast(t("fillRequired"),"error");return;}
+  if(!role){showToast("Please select a role","error");return;}
+
+  var btn=document.querySelector('#loginForm .btn-primary');
+  var origBtnHtml=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Signing in...';}
+
+  // SINGLE direct query for users only - fast, no waiting for all 15 collections
+  if(window._firebaseReady&&window._firebase)isFirebaseReady=true;
+
+  // Wait briefly (max 6s) for Firebase module itself to be ready (not data)
+  if(!window._firebase){
+    for(var _fw=0;_fw<30&&!window._firebase;_fw++){
+      await new Promise(function(r){setTimeout(r,200);});
+    }
+  }
+
+  if(window._firebase){
+    try{
+      console.log('[doLogin] Querying users collection directly...');
+      var snap=await window._firebase.getDocs(window._firebase.collection('users'));
+      var freshList=[];
+      snap.forEach(function(d){var u=d.data();u.id=d.id;freshList.push(u);});
+      console.log('[doLogin] Direct query returned',freshList.length,'users');
+      var savedCurrent=DB.currentUser;
+      if(freshList.length>0){
+        DB.users=freshList;
       }
-    },1000);
-    showToast(t('welcomeUser')+', '+user.name+'!','success');
-    navigateTo('dashboard');
-  }).catch(function(){
-    DB.currentUser=user;
-    setupRealtimeSubscription();
-    showToast(t('welcomeUser')+', '+user.name+'!','success');
-    navigateTo('dashboard');
-  });
-}else{showToast(t("welcomeUser")+", "+user.name+"!","success");navigateTo("dashboard")}}
+      // Ensure the default admin account always exists, even if Firestore
+      // collection is missing it or empty (first-run / fresh database)
+      var hasAdmin=DB.users.some(function(u){return u.role==='Admin';});
+      if(!hasAdmin){
+        var defaultAdmin=DB_DEFAULT.users.find(function(u){return u.role==='Admin';});
+        if(defaultAdmin){
+          DB.users.push(defaultAdmin);
+          console.log('[doLogin] No Admin in Firestore - added default admin locally and syncing to server');
+          // Push it to Firestore so it persists from now on
+          fbSet('users',defaultAdmin).then(function(ok){
+            console.log('[doLogin] Default admin sync to Firestore:',ok?'success':'failed');
+          }).catch(function(e){console.warn('[doLogin] Admin sync error:',e.message);});
+        }
+      }
+      DB.currentUser=savedCurrent;
+      saveDBLocalOnly();
+    }catch(fetchErr){
+      console.error('[doLogin] Direct users query FAILED:',fetchErr.code,fetchErr.message);
+      if(btn){btn.disabled=false;btn.innerHTML=origBtnHtml;}
+      showToast('Connection error: '+(fetchErr.code||fetchErr.message),'error');
+      return;
+    }
+  } else {
+    console.warn('[doLogin] Firebase module never loaded, using local cache only');
+  }
+
+  var hashedPw=hashPassword(password);
+  var user=null;
+  if(role==="Student"){
+    user=DB.users.find(function(u){return u.role==="Student"&&u.mobile===identifier&&(u.password===hashedPw||u.password===password);});
+  }else if(role==="Teacher"){
+    user=DB.users.find(function(u){return u.role==="Teacher"&&(u.username===identifier||u.mobile===identifier)&&(u.password===hashedPw||u.password===password);});
+  }else if(role==="Admin"){
+    user=DB.users.find(function(u){return u.role==="Admin"&&(u.username===identifier||u.mobile===identifier)&&(u.password===hashedPw||u.password===password);});
+  }
+
+  if(btn){btn.disabled=false;btn.innerHTML=origBtnHtml;}
+
+  if(!user){
+    console.warn('[doLogin] No match. DB.users count:',DB.users?DB.users.length:0,'role:',role,'identifier:',identifier);
+    if(role==='Admin'){
+      var allAdmins=DB.users.filter(function(u){return u.role==='Admin';});
+      console.log('[doLogin] Admin accounts in database:',allAdmins.length);
+      allAdmins.forEach(function(a){
+        console.log('  - username:"'+a.username+'" mobile:"'+a.mobile+'" password hash:"'+a.password+'" (entered hash would be:"'+hashedPw+'")');
+      });
+      if(allAdmins.length===0){
+        console.error('[doLogin] ZERO admin accounts exist in DB.users at all!');
+      }
+    }
+    if(DB.users&&DB.users.length===0){
+      showToast('No user accounts found in the database. If you just registered, please wait a moment and try again, or contact admin.','error');
+    } else {
+      showToast(t("invalidCredentials")||"Invalid credentials. Please check and try again.","error");
+    }
+    return;
+  }
+  if(user.status==="Inactive"){
+    showToast("Your account is inactive. Please contact admin.","error");
+    return;
+  }
+  if(user.status==="Pending"&&role==="Student"){
+    showToast("Your registration is still pending admin approval. Please wait or contact admin.","warning");
+    return;
+  }
+
+  var freshUser=DB.users.find(function(u){return u.id===user.id;})||user;
+  DB.currentUser=freshUser;
+  localStorage.setItem(DB_KEY,JSON.stringify(DB));
+  addAudit("LOGIN",role+" "+user.name+" logged in");
+  $("loginMobile").value="";$("loginUsername").value="";$("loginPassword").value="";
+  backToRoleSelector();
+  $("authScreen").classList.add("hidden");
+  $("mainApp").classList.remove("hidden");
+  updateNotifBadge();
+  startSessionTimeout();
+  document.addEventListener("click",resetSessionTimer);
+  document.addEventListener("keydown",resetSessionTimer);
+  showToast(t('welcomeUser')+', '+user.name+'!','success');
+  navigateTo('dashboard');
+
+  // Load remaining collections in background AFTER login completes (non-blocking)
+  if(isFirebaseReady&&window._firebase){
+    loadFromFirebase().then(function(loaded){
+      DB.currentUser=user;
+      if(loaded)saveDBLocalOnly();
+      setupRealtimeSubscription();
+      setTimeout(function(){if(typeof autoMarkAttendance==='function')autoMarkAttendance();},2000);
+      if(typeof startSyncHeartbeat==='function')startSyncHeartbeat();
+      setTimeout(function(){populateAssClassGroup();},500);
+      setTimeout(function(){
+        if(typeof initNotifications==='function')initNotifications();
+        if(Notification&&Notification.permission==='default'){
+          setTimeout(function(){
+            if(confirm('Enable push notifications to stay updated on assignments, results and messages?')){
+              requestNotifPermission();
+            }
+          },3000);
+        }
+      },1000);
+      refreshCurrentPage();
+    }).catch(function(e){
+      console.warn('[doLogin] Background loadFromFirebase failed:',e.message);
+      setupRealtimeSubscription();
+    });
+  }
+}
 function doLogout(){addAudit("LOGOUT",(DB.currentUser?DB.currentUser.role:"User")+" "+(DB.currentUser?DB.currentUser.name:"unknown")+" logged out");DB.currentUser=null;localStorage.setItem(DB_KEY,JSON.stringify(DB));$("mainApp").classList.add("hidden");$("authScreen").classList.remove("hidden");backToRoleSelector();clearTimeout(window._sessionTimer);document.removeEventListener("click",resetSessionTimer);document.removeEventListener("keydown",resetSessionTimer);showToast(t("loggedOut"),"success")}
 
 function updateNotifBadge(){var badge=$('notifBadge');if(!badge)return;var user=DB.currentUser;if(!user){badge.style.display='none';return}var unread=DB.notifications.filter(function(n){return !n.read&&(n.target==='all'||n.target===user.id||n.target===user.role)}).length;if(unread>0){badge.textContent=unread>9?'9+':unread;badge.style.display='flex'}else{badge.style.display='none'}}
@@ -2908,7 +3118,8 @@ async function doRegister(){
       classGroup:classGroup,classID:classID,gender:gender,
       teacher:assignedTeacher?assignedTeacher.id:'',
       teacherName:assignedTeacher?assignedTeacher.name:'',
-      status:'Pending',nationality:nationality,
+      status:(DB.settings&&DB.settings.autoApproveStudents===false)?'Pending':'Approved',
+      nationality:nationality,
       regDate:new Date().toISOString().slice(0,10),
       notifPrefs:{}
     };
@@ -2934,14 +3145,27 @@ async function doRegister(){
     if(window._firebase){
       try{
         isFirebaseReady=true;
-        await fbSet('users',newUser);
-        firebaseSaved=true;
+        firebaseSaved=await fbSet('users',newUser);
+        if(firebaseSaved){
+          console.log('[doRegister] ✅ Confirmed saved to Firestore:',newUser.id);
+        } else {
+          var realErr=window._lastFbSetError||'Unknown error';
+          console.error('[doRegister] ❌ fbSet returned false. Reason:',realErr);
+          showToast('Registration could NOT be saved to the server: '+realErr+'. Please contact admin or try again.','error');
+          re_enable();
+          return;
+        }
       }catch(fbErr){
-        console.error('Firebase save failed:',fbErr);
-        showToast('Registration saved locally. Will sync when connection is restored.','warning');
+        console.error('[doRegister] Firebase save threw exception:',fbErr);
+        showToast('Registration failed: '+(fbErr.message||fbErr),'error');
+        re_enable();
+        return;
       }
     } else {
-      showToast('Saved offline. Will sync to server when connected.','warning');
+      console.error('[doRegister] window._firebase not available - cannot save to server');
+      showToast('Cannot connect to server. Registration NOT saved. Please check your internet connection and try again.','error');
+      re_enable();
+      return;
     }
 
     addAudit('REGISTER','New registration: '+name+' ('+classGroup+')');
@@ -2949,11 +3173,15 @@ async function doRegister(){
     // Notify admins
     var admins=(DB.users||[]).filter(function(u){return u.role==='Admin';}).map(function(u){return u.id;});
     if(admins.length&&typeof pushNotification==='function'){
-      pushNotification('New Registration',name+' has registered for '+classGroup+'. Awaiting approval.','info','dashboard',admins);
+      var isAutoApproved=!(DB.settings&&DB.settings.autoApproveStudents===false);
+      pushNotification('New Registration',name+' registered for '+classGroup+(isAutoApproved?' and was auto-approved.':' — awaiting your approval.'),'info','dashboard',admins);
     }
 
     // Success
-    showToast(t('registrationSubmitted')||'Registration submitted! Awaiting admin approval.','success');showRegStatus(t('registrationSubmitted')||'Registration submitted! Awaiting admin approval.','success');
+    var _autoMsg=(DB.settings&&DB.settings.autoApproveStudents===false)
+      ?(t('registrationSubmitted')||'Registration submitted! Awaiting admin approval.')
+      :'Registration successful! You can now login.';
+    showToast(_autoMsg,'success');showRegStatus(_autoMsg,'success');
     re_enable();
 
     // Switch to login after 2.5s
@@ -4019,9 +4247,251 @@ function showOfflineBanner(show){
   b.style.display=show?'block':'none';
 }
 
-function renderDashboard(){autoCloseAssignments();var user=DB.currentUser;if(!user)return;var html="";html+='<div class="welcome-banner"><h2>Assalamu Alaikum, '+esc(user.name)+'!</h2><p data-i18n="welcome"></p></div>';if(user.role==="Admin"){html+='<div class="stats-grid"><div class="stat-card" style="cursor:pointer" onclick="showAdminStudents()"><div class="stat-icon" style="background:var(--primary)"><i class="fas fa-user-graduate"></i></div><div class="stat-value">'+getStudentCount()+'</div><div class="stat-label" data-i18n="allStudents"></div></div><div class="stat-card" style="cursor:pointer" onclick="showAdminTeachers()"><div class="stat-icon" style="background:var(--info)"><i class="fas fa-chalkboard-teacher"></i></div><div class="stat-value">'+getTeacherCount()+'</div><div class="stat-label" data-i18n="teacher"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'assignments\')"><div class="stat-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><div class="stat-value">'+DB.assignments.filter(function(a){return a.status==="Active"}).length+'</div><div class="stat-label" data-i18n="assignments"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'events\')"><div class="stat-icon" style="background:var(--success)"><i class="fas fa-calendar-check"></i></div><div class="stat-value">'+DB.events.length+'</div><div class="stat-label" data-i18n="events"></div></div></div>';html+='<div class="section-header"><h3 data-i18n="quickActions"></h3></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="openStudentModal()"><div class="qa-icon" style="background:var(--primary)"><i class="fas fa-user-plus"></i></div><span data-i18n="addStudent"></span></button><button class="quick-action" onclick="openTeacherMgmt()"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-chalkboard-teacher"></i></div><span>Manage Teachers</span></button><button class="quick-action" onclick="openAssignmentModal()"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><span data-i18n="newAssignment"></span></button><button class="quick-action" onclick="openEventModal()"><div class="qa-icon" style="background:var(--success)"><i class="fas fa-calendar-plus"></i></div><span data-i18n="newEvent"></span></button><button class="quick-action" onclick="navigateTo(&quot;certificates&quot;)"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><span>Certificates</span></button><button class="quick-action" onclick="navigateTo(&quot;attendance&quot;)"><div class="qa-icon" style="background:var(--primary)"><i class="fas fa-calendar-check"></i></div><span>Attendance</span></button><button class="quick-action" onclick="navigateTo(&quot;reports&quot;)"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-chart-bar"></i></div><span>Reports</span></button><button class="quick-action" onclick="navigateTo(&quot;notifPrefs&quot;)"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-bell"></i></div><span>Notifications</span></button></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="openBroadcastModal()"><div class="qa-icon" style="background:var(--danger)"><i class="fas fa-broadcast-tower"></i></div><span data-i18n="broadcast"></span></button><button class="quick-action" onclick="openApprovalPanel()"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-user-check"></i></div><span>Approval Panel</span></button><button class="quick-action" onclick="openVideoRecorder()"><div class="qa-icon" style="background:var(--danger)"><i class="fas fa-video"></i></div><span data-i18n="videoRecorder"></span></button><button class="quick-action" onclick="renderCertificateApproval()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><span data-i18n="certificateApproval"></span></button><button class="quick-action" onclick="showAllRegistrations()"><div class="qa-icon" style="background:var(--primary-light)"><i class="fas fa-clipboard-list"></i></div><span data-i18n="allRegistrations"></span></button><button class="quick-action" onclick="openModal(\'dataMgmtModal\')"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-database"></i></div><span data-i18n="dataManagement"></span></button><button class="quick-action" onclick="showSettings()"><div class="qa-icon" style="background:var(--primary-dark)"><i class="fas fa-cog"></i></div><span data-i18n="settings"></span></button></div>';html+='<div class="section-header"><h3 data-i18n="allStudents"></h3><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="openSendNotification()"><i class="fas fa-bullhorn"></i> Notify</button><a href="#" class="see-all" onclick="showAdminStudents();return false" data-i18n="viewAll"></a></div></div>';html+='<div class="card">';var students=DB.users.filter(function(u){return u.role==="Student"}).slice(0,5);if(students.length===0)html+=emptyState("noStudents");else students.forEach(function(s){html+=renderUserRow(s,true)});html+='</div>'}else if(user.role==="Teacher"){var myStudents=DB.users.filter(function(u){return u.role==="Student"&&u.teacher===user.id});var pendingCerts=DB.certificates.filter(function(c){var st=DB.users.find(function(u){return u.id===c.studentId});return st&&st.teacher===user.id&&c.status==="Pending"});html+='<div class="stats-grid"><div class="stat-card"><div class="stat-icon" style="background:var(--primary)"><i class="fas fa-user-graduate"></i></div><div class="stat-value">'+myStudents.length+'</div><div class="stat-label" data-i18n="allStudents"></div></div><div class="stat-card" style="cursor:pointer" onclick="openAssignmentModal()"><div class="stat-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><div class="stat-value">'+DB.assignments.filter(function(a){return a.status==="Active"}).length+'</div><div class="stat-label" data-i18n="assignments"></div></div><div class="stat-card" style="cursor:pointer" onclick="renderTeacherCertificateApproval()"><div class="stat-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><div class="stat-value">'+pendingCerts.length+'</div><div class="stat-label">Pending Certs</div></div><div class="stat-card"><div class="stat-icon" style="background:var(--info)"><i class="fas fa-envelope"></i></div><div class="stat-value">'+DB.messages.filter(function(m){return m.to===user.id&&!m.read}).length+'</div><div class="stat-label" data-i18n="messages"></div></div></div>';html+='<div class="section-header"><h3 data-i18n="quickActions"></h3></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="openAssignmentModal()"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><span data-i18n="newAssignment"></span></button><button class="quick-action" onclick="renderTeacherCertificateApproval()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><span>Cert Approval</span></button><button class="quick-action" onclick="openBroadcastModal()"><div class="qa-icon" style="background:var(--danger)"><i class="fas fa-broadcast-tower"></i></div><span data-i18n="broadcast"></span></button><button class="quick-action" onclick="openVideoRecorder()"><div class="qa-icon" style="background:var(--primary)"><i class="fas fa-video"></i></div><span data-i18n="videoRecorder"></span></button></div>';html+='<div class="section-header"><h3 data-i18n="allStudents"></h3></div>';html+='<div class="card">';if(myStudents.length===0)html+=emptyState("noStudents");else myStudents.forEach(function(s){html+=renderUserRow(s,false)});html+='</div>'}else{var myTeacher=getTeacherName(user.teacher);html+='<div class="stats-grid"><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'assignments\')"><div class="stat-icon" style="background:var(--primary)"><i class="fas fa-user-graduate"></i></div><div class="stat-value">'+calcAttPct(user.id)+'%</div><div class="stat-label" data-i18n="attendance"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'assignments\')"><div class="stat-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><div class="stat-value">'+getStudentPendingCount(user.id)+'</div><div class="stat-label" data-i18n="pending"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'results\')"><div class="stat-icon" style="background:var(--success)"><i class="fas fa-trophy"></i></div><div class="stat-value">'+calcStudentGrade(user.id)+'</div><div class="stat-label" data-i18n="grade"></div></div><div class="stat-card" style="cursor:pointer" onclick="showMyCertificates()"><div class="stat-icon" style="background:var(--info)"><i class="fas fa-certificate"></i></div><div class="stat-value">'+getStudentCertStatus(user.id)+'</div><div class="stat-label" data-i18n="certificates"></div></div></div>';html+='<div class="section-header"><h3 data-i18n="quickActions"></h3></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="navigateTo(\'assignments\')"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><span data-i18n="assignments"></span></button><button class="quick-action" onclick="navigateTo(\'events\')"><div class="qa-icon" style="background:var(--success)"><i class="fas fa-calendar-alt"></i></div><span data-i18n="events"></span></button><button class="quick-action" onclick="showMyBookings()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-ticket-alt"></i></div><span data-i18n="myBookings"></span></button><button class="quick-action" onclick="showMyCertificates()"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-certificate"></i></div><span data-i18n="myCertificates"></span></button></div>';html+='<div class="card"><div class="card-header"><h3 data-i18n="myProfile"></h3></div><div class="card-body"><div class="list-item" style="border-bottom:none;cursor:default"><div class="list-avatar">'+user.name.charAt(0)+'</div><div class="list-content"><div class="list-title">'+esc(user.name)+'</div><div class="list-subtitle">'+t("classGroup")+': '+(user.classGroup?('<b>'+esc(user.classGroup)+'</b>'):'<span style="color:var(--warning)">Pending assignment</span>')+' | '+t("teacher")+': '+myTeacher+'</div></div></div><div style="margin-top:10px"><div style="font-size:0.75rem;color:var(--text-light);margin-bottom:4px" data-i18n="assignmentProgress"></div><div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div><div style="font-size:0.7rem;color:var(--text-light);text-align:right">65% '+t("complete")+'</div></div></div></div>';html+='<div class="section-header"><h3 data-i18n="upcomingAssignments"></h3><a href="#" class="see-all" onclick="navigateTo(\'assignments\');return false" data-i18n="viewAll"></a></div>';html+='<div class="card">';var pending=DB.assignments.filter(function(a){return a.status==="Active"}).slice(0,3);if(pending.length===0)html+=emptyState("noAssignments");else pending.forEach(function(a){html+=renderAssignmentPreview(a)});html+='</div>'}$('mainContent').innerHTML=html;applyTranslations()}
+function checkForAppUpdate(){
+  fetch(location.pathname+'?_v='+Date.now(),{cache:'no-store'})
+    .then(function(r){return r.text();})
+    .then(function(html){
+      var m=html.match(/APP_VERSION='([^']+)'/);
+      if(m&&m[1]!==APP_VERSION){
+        var hasOpenModal=!!document.querySelector('.modal-overlay.active');
+        var page=window._currentPage||window.currentPage||'dashboard';
+        // Auto-reload silently if it's safe (no modal open, on dashboard/read-only page)
+        var safePages=['dashboard','events','assignments','messages','certificates'];
+        if(!hasOpenModal&&safePages.indexOf(page)>=0&&!window._autoUpdateScheduled){
+          window._autoUpdateScheduled=true;
+          console.log('[Update] Safe to auto-refresh, applying update silently in 3s...');
+          setTimeout(function(){
+            if(!document.querySelector('.modal-overlay.active')){
+              location.reload(true);
+            } else {
+              window._autoUpdateScheduled=false;
+              showUpdateBanner();
+            }
+          },3000);
+        } else {
+          showUpdateBanner();
+        }
+      }
+    }).catch(function(){});
+}
+function showUpdateBanner(){
+  if(document.getElementById('appUpdateBanner'))return;
+  var b=document.createElement('div');
+  b.id='appUpdateBanner';
+  b.style.cssText='position:fixed;bottom:70px;left:16px;right:16px;background:var(--primary);color:#fff;padding:12px 16px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:99997;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.85rem';
+  b.innerHTML='<span><i class="fas fa-sync"></i> New version available</span><button onclick="location.reload(true)" style="background:#fff;color:var(--primary);border:none;padding:6px 14px;border-radius:8px;font-weight:600;cursor:pointer">Update Now</button>';
+  document.body.appendChild(b);
+}
 
-function renderUserRow(u,isAdmin){var html='<div class="list-item" '+(isAdmin?'onclick="editStudent(\''+u.id+'\')"':'')+'>';html+='<div class="list-avatar">'+u.name.charAt(0)+'</div>';html+='<div class="list-content"><div class="list-title">'+esc(u.name)+'</div><div class="list-subtitle">'+(u.nationality||"")+' | '+u.classGroup+(u.classID?' <span style="color:var(--primary);font-family:monospace">['+esc(u.classID)+']</span>':'')+' | '+u.mobile+'</div></div>';html+='<div class="list-meta">';if(isAdmin){html+='<div style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:4px"><button class="btn btn-icon btn-sm" style="background:var(--info);color:white" onclick="event.stopPropagation();editStudent(\''+u.id+'\')"><i class="fas fa-edit"></i></button><button class="btn btn-icon btn-sm" style="background:var(--warning);color:white" onclick="event.stopPropagation();openResetPwModal(\''+u.id+'\')"><i class="fas fa-key"></i></button><button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="event.stopPropagation();confirmDelete(\'student\',\''+u.id+'\')"><i class="fas fa-trash"></i></button></div>'}html+='<span class="ass-status badge-'+(u.status==='Approved'?'active':(u.status==='Rejected'?'inactive':'pending'))+'">'+u.status+'</span>';html+='</div></div>';return html}
+function injectTeacherVideoButton(){
+  var qa=document.querySelector('.quick-actions');
+  if(!qa)return;
+  if(!qa.querySelector('.teacher-broadcast-btn')){
+    var bbtn=document.createElement('button');
+    bbtn.className='quick-action teacher-broadcast-btn';
+    bbtn.onclick=function(){openBroadcastModal();};
+    bbtn.innerHTML='<div class="qa-icon" style="background:var(--danger)"><i class="fas fa-broadcast-tower"></i></div><span>Broadcast</span>';
+    qa.appendChild(bbtn);
+  }
+  if(!qa.querySelector('.teacher-video-btn')){
+    var vbtn=document.createElement('button');
+    vbtn.className='quick-action teacher-video-btn';
+    vbtn.onclick=function(){openVideoRecorder();};
+    vbtn.innerHTML='<div class="qa-icon" style="background:var(--primary)"><i class="fas fa-video"></i></div><span>Video Recorder</span>';
+    qa.appendChild(vbtn);
+  }
+  if(!qa.querySelector('.teacher-review-videos-btn')){
+    var rbtn=document.createElement('button');
+    rbtn.className='quick-action teacher-review-videos-btn';
+    rbtn.onclick=function(){showStudentVideosModal();};
+    var pendingCount=(DB.studentVideos||[]).filter(function(v){
+      var s=DB.users.find(function(u){return u.id===v.studentId;});
+      return s&&s.teacher===DB.currentUser.id&&v.status==='Pending Review';
+    }).length;
+    rbtn.innerHTML='<div class="qa-icon" style="background:var(--accent)"><i class="fas fa-film"></i></div><span>Review Videos'+(pendingCount?' ('+pendingCount+')':'')+'</span>';
+    qa.appendChild(rbtn);
+  }
+}
+
+function toggleUserVideoPermission(userId){
+  var u=DB.users.find(function(x){return x.id===userId;});
+  if(!u)return;
+  u.videoRecordingEnabled=!u.videoRecordingEnabled;
+  // If the toggled user IS the currently logged-in user (e.g. self-test), update immediately
+  if(DB.currentUser&&DB.currentUser.id===userId){
+    DB.currentUser.videoRecordingEnabled=u.videoRecordingEnabled;
+  }
+  fbSaveRecord('users',u,
+    u.videoRecordingEnabled?(u.name+' can now record videos')+(u.role==='Teacher'?' and broadcast':''):'Video recording disabled for '+u.name,
+    function(){
+      if(typeof renderTeacherAccountsList==='function')renderTeacherAccountsList();
+      if(typeof renderApprovalList==='function')renderApprovalList(window._approvalFilter||'all');
+      // Force dashboard re-render even if a modal is open (this update is harmless and important)
+      if(typeof renderDashboard==='function')renderDashboard();
+    }
+  );
+}
+
+function injectStudentVideoButton(){
+  var qa=document.querySelector('.quick-actions');
+  if(!qa||qa.querySelector('.student-video-btn'))return;
+  var btn=document.createElement('button');
+  btn.className='quick-action student-video-btn';
+  btn.onclick=function(){openStudentVideoRecorder();};
+  btn.innerHTML='<div class="qa-icon" style="background:var(--danger)"><i class="fas fa-video"></i></div><span>Record Video</span>';
+  qa.appendChild(btn);
+}
+
+async function runDiagnostic(){
+  var panel=document.getElementById('diagPanel');
+  var content=document.getElementById('diagContent');
+  panel.style.display='flex';
+  content.textContent='Running diagnostic...\n';
+
+  var log=[];
+  function add(line){log.push(line);content.textContent=log.join('\n');}
+
+  add('=== FIREBASE STATUS ===');
+  add('window._firebase exists: '+(!!window._firebase));
+  add('window._firebaseReady: '+(!!window._firebaseReady));
+  add('isFirebaseReady (app flag): '+(!!isFirebaseReady));
+  add('window._firebaseError: '+(window._firebaseError||'none'));
+  add('');
+  add('=== LOCAL DATA ===');
+  add('DB.users count: '+(DB.users?DB.users.length:0));
+  add('localStorage has data: '+(!!localStorage.getItem(DB_KEY)));
+  add('');
+
+  if(window._firebase){
+    add('=== TESTING DIRECT FIRESTORE READ ===');
+    try{
+      var snap=await window._firebase.getDocs(window._firebase.collection('users'));
+      add('Query succeeded. Documents returned: '+snap.size);
+      if(snap.size>0){
+        var names=[];
+        snap.forEach(function(d){var u=d.data();names.push(u.name||u.mobile||d.id);});
+        add('Users found: '+names.join(', '));
+      } else {
+        add('Result: ZERO documents in the users collection.');
+        add('Firestore connected successfully but the collection is empty.');
+      }
+    }catch(testErr){
+      add('QUERY FAILED:');
+      add('Error code: '+(testErr.code||'unknown'));
+      add('Error message: '+(testErr.message||testErr));
+      add('');
+      if(testErr.code==='permission-denied'){
+        add('>>> THIS IS A FIRESTORE SECURITY RULES PROBLEM <<<');
+        add('Go to Firebase Console > Firestore Database > Rules');
+        add('and set: allow read, write: if true;');
+      }
+    }
+
+    add('');
+    add('=== TESTING DIRECT FIRESTORE WRITE ===');
+    try{
+      var testDoc={id:'_diagnostic_test',_test:true,timestamp:new Date().toISOString()};
+      await window._firebase.setDoc(window._firebase.doc('users',testDoc.id),testDoc);
+      add('WRITE SUCCEEDED - test document saved.');
+      try{
+        await window._firebase.deleteDoc(window._firebase.doc('users',testDoc.id));
+        add('Cleanup: test document deleted.');
+      }catch(delErr){add('Cleanup failed (not critical): '+delErr.message);}
+    }catch(writeErr){
+      add('WRITE FAILED:');
+      add('Error code: '+(writeErr.code||'unknown'));
+      add('Error message: '+(writeErr.message||writeErr));
+      add('');
+      if(writeErr.code==='permission-denied'){
+        add('>>> CONFIRMED: FIRESTORE SECURITY RULES ARE BLOCKING WRITES <<<');
+        add('This is why registration silently fails.');
+        add('FIX: Firebase Console > Firestore Database > Rules tab');
+        add('Use: allow read, write: if true;');
+      }
+    }
+  } else {
+    add('Cannot test Firestore - window._firebase is not set.');
+    add('The Firebase SDK module failed to load entirely.');
+    add('Check your internet connection or try a different network/browser.');
+  }
+}
+
+async function resetAdminPassword(){
+  if(!confirm('This will reset the admin account password to "admin123" (username stays "admin"). Continue?'))return;
+  var content=document.getElementById('diagContent');
+  function add(line){content.textContent+='\n'+line;}
+
+  if(!window._firebase){
+    add('ERROR: Firebase not connected, cannot reset.');
+    return;
+  }
+
+  try{
+    add('Searching for existing admin accounts...');
+    var snap=await window._firebase.getDocs(window._firebase.collection('users'));
+    var adminDocs=[];
+    snap.forEach(function(d){var u=d.data();u.id=d.id;if(u.role==='Admin')adminDocs.push(u);});
+    add('Found '+adminDocs.length+' admin account(s) in Firestore.');
+
+    var newHash=hashPassword('admin123');
+
+    if(adminDocs.length>0){
+      for(var i=0;i<adminDocs.length;i++){
+        var a=adminDocs[i];
+        a.username='admin';
+        a.password=newHash;
+        a.status='Active';
+        await window._firebase.setDoc(window._firebase.doc('users',a.id),a);
+        add('Reset password for admin id: '+a.id+' (username now "admin")');
+      }
+    } else {
+      var newAdmin={
+        id:'admin',name:'System Admin',mobile:'admin',username:'admin',
+        password:newHash,role:'Admin',email:'admin@jdc.tamil',
+        classGroup:'',gender:'Male',teacher:'',status:'Active',nationality:'Saudi'
+      };
+      await window._firebase.setDoc(window._firebase.doc('users','admin'),newAdmin);
+      add('No admin existed - created new one with id "admin"');
+    }
+
+    add('');
+    add('DONE. You can now login with:');
+    add('Username: admin');
+    add('Password: admin123');
+    add('');
+    add('Please close this panel and try logging in.');
+  }catch(err){
+    add('ERROR: '+(err.code||'')+' '+(err.message||err));
+  }
+}
+
+function renderDashboard(){autoCloseAssignments();var user=DB.currentUser;if(!user)return;var html="";html+='<div class="welcome-banner"><h2>Assalamu Alaikum, '+esc(user.name)+'!</h2><p data-i18n="welcome"></p></div>';if(user.role==="Admin"){html+='<div class="stats-grid"><div class="stat-card" style="cursor:pointer" onclick="showAdminStudents()"><div class="stat-icon" style="background:var(--primary)"><i class="fas fa-user-graduate"></i></div><div class="stat-value">'+getStudentCount()+'</div><div class="stat-label" data-i18n="allStudents"></div></div><div class="stat-card" style="cursor:pointer" onclick="showAdminTeachers()"><div class="stat-icon" style="background:var(--info)"><i class="fas fa-chalkboard-teacher"></i></div><div class="stat-value">'+getTeacherCount()+'</div><div class="stat-label" data-i18n="teacher"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'assignments\')"><div class="stat-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><div class="stat-value">'+DB.assignments.filter(function(a){return a.status==="Active"}).length+'</div><div class="stat-label" data-i18n="assignments"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'events\')"><div class="stat-icon" style="background:var(--success)"><i class="fas fa-calendar-check"></i></div><div class="stat-value">'+DB.events.length+'</div><div class="stat-label" data-i18n="events"></div></div></div>';html+='<div class="section-header"><h3 data-i18n="quickActions"></h3></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="openStudentModal()"><div class="qa-icon" style="background:var(--primary)"><i class="fas fa-user-plus"></i></div><span data-i18n="addStudent"></span></button><button class="quick-action" onclick="openTeacherMgmt()"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-chalkboard-teacher"></i></div><span>Manage Teachers</span></button><button class="quick-action" onclick="openAssignmentModal()"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><span data-i18n="newAssignment"></span></button><button class="quick-action" onclick="openEventModal()"><div class="qa-icon" style="background:var(--success)"><i class="fas fa-calendar-plus"></i></div><span data-i18n="newEvent"></span></button><button class="quick-action" onclick="navigateTo(&quot;certificates&quot;)"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><span>Certificates</span></button><button class="quick-action" onclick="navigateTo(&quot;attendance&quot;)"><div class="qa-icon" style="background:var(--primary)"><i class="fas fa-calendar-check"></i></div><span>Attendance</span></button><button class="quick-action" onclick="navigateTo(&quot;reports&quot;)"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-chart-bar"></i></div><span>Reports</span></button><button class="quick-action" onclick="navigateTo(&quot;notifPrefs&quot;)"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-bell"></i></div><span>Notifications</span></button></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="openBroadcastModal()"><div class="qa-icon" style="background:var(--danger)"><i class="fas fa-broadcast-tower"></i></div><span data-i18n="broadcast"></span></button><button class="quick-action" onclick="openApprovalPanel()"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-user-check"></i></div><span>Approval Panel</span></button><button class="quick-action" onclick="openVideoRecorder()"><div class="qa-icon" style="background:var(--danger)"><i class="fas fa-video"></i></div><span data-i18n="videoRecorder"></span></button><button class="quick-action" onclick="showStudentVideosModal()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-film"></i></div><span>Student Videos</span></button><button class="quick-action" onclick="renderCertificateApproval()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><span data-i18n="certificateApproval"></span></button><button class="quick-action" onclick="showAllRegistrations()"><div class="qa-icon" style="background:var(--primary-light)"><i class="fas fa-clipboard-list"></i></div><span data-i18n="allRegistrations"></span></button><button class="quick-action" onclick="openModal(\'dataMgmtModal\')"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-database"></i></div><span data-i18n="dataManagement"></span></button><button class="quick-action" onclick="showSettings()"><div class="qa-icon" style="background:var(--primary-dark)"><i class="fas fa-cog"></i></div><span data-i18n="settings"></span></button></div>';html+='<div class="section-header"><h3 data-i18n="allStudents"></h3><div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" onclick="openSendNotification()"><i class="fas fa-bullhorn"></i> Notify</button><a href="#" class="see-all" onclick="showAdminStudents();return false" data-i18n="viewAll"></a></div></div>';html+='<div class="card">';var students=DB.users.filter(function(u){return u.role==="Student"}).slice(0,5);if(students.length===0)html+=emptyState("noStudents");else students.forEach(function(s){html+=renderUserRow(s,true)});html+='</div>'}else if(user.role==="Teacher"){var myStudents=DB.users.filter(function(u){return u.role==="Student"&&u.teacher===user.id});var pendingCerts=DB.certificates.filter(function(c){var st=DB.users.find(function(u){return u.id===c.studentId});return st&&st.teacher===user.id&&c.status==="Pending"});html+='<div class="stats-grid"><div class="stat-card"><div class="stat-icon" style="background:var(--primary)"><i class="fas fa-user-graduate"></i></div><div class="stat-value">'+myStudents.length+'</div><div class="stat-label" data-i18n="allStudents"></div></div><div class="stat-card" style="cursor:pointer" onclick="openAssignmentModal()"><div class="stat-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><div class="stat-value">'+DB.assignments.filter(function(a){return a.status==="Active"}).length+'</div><div class="stat-label" data-i18n="assignments"></div></div><div class="stat-card" style="cursor:pointer" onclick="renderTeacherCertificateApproval()"><div class="stat-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><div class="stat-value">'+pendingCerts.length+'</div><div class="stat-label">Pending Certs</div></div><div class="stat-card"><div class="stat-icon" style="background:var(--info)"><i class="fas fa-envelope"></i></div><div class="stat-value">'+DB.messages.filter(function(m){return m.to===user.id&&!m.read}).length+'</div><div class="stat-label" data-i18n="messages"></div></div></div>';html+='<div class="section-header"><h3 data-i18n="quickActions"></h3></div>';var tVidOk=!!user.videoRecordingEnabled;
+html+='<div class="quick-actions"><button class="quick-action" onclick="openAssignmentModal()"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><span data-i18n="newAssignment"></span></button><button class="quick-action" onclick="renderTeacherCertificateApproval()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-certificate"></i></div><span>Cert Approval</span></button><button class="quick-action" onclick="openBroadcastModal()" style="position:relative">'+(tVidOk?'':'<i class="fas fa-lock" style="position:absolute;top:4px;right:8px;font-size:0.65rem;color:var(--text-light)"></i>')+'<div class="qa-icon" style="background:var(--danger);'+(tVidOk?'':'opacity:0.45')+'"><i class="fas fa-broadcast-tower"></i></div><span style="'+(tVidOk?'':'color:var(--text-light)')+'">Broadcast</span></button><button class="quick-action" onclick="openVideoRecorder()" style="position:relative">'+(tVidOk?'':'<i class="fas fa-lock" style="position:absolute;top:4px;right:8px;font-size:0.65rem;color:var(--text-light)"></i>')+'<div class="qa-icon" style="background:var(--primary);'+(tVidOk?'':'opacity:0.45')+'"><i class="fas fa-video"></i></div><span style="'+(tVidOk?'':'color:var(--text-light)')+'">Video Recorder</span></button>';
+if(tVidOk){
+  var pendingVidCount=(DB.studentVideos||[]).filter(function(v){var s=DB.users.find(function(u){return u.id===v.studentId;});return s&&s.teacher===user.id&&v.status==='Pending Review';}).length;
+  html+='<button class="quick-action" onclick="showStudentVideosModal()"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-film"></i></div><span>Review Videos'+(pendingVidCount?' ('+pendingVidCount+')':'')+'</span></button>';
+}
+html+='</div>';html+='<div class="section-header"><h3 data-i18n="allStudents"></h3></div>';html+='<div class="card">';if(myStudents.length===0)html+=emptyState("noStudents");else myStudents.forEach(function(s){html+=renderUserRow(s,false)});html+='</div>'}else{var myTeacher=getTeacherName(user.teacher);html+='<div class="stats-grid"><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'assignments\')"><div class="stat-icon" style="background:var(--primary)"><i class="fas fa-user-graduate"></i></div><div class="stat-value">'+calcAttPct(user.id)+'%</div><div class="stat-label" data-i18n="attendance"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'assignments\')"><div class="stat-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><div class="stat-value">'+getStudentPendingCount(user.id)+'</div><div class="stat-label" data-i18n="pending"></div></div><div class="stat-card" style="cursor:pointer" onclick="navigateTo(\'results\')"><div class="stat-icon" style="background:var(--success)"><i class="fas fa-trophy"></i></div><div class="stat-value">'+calcStudentGrade(user.id)+'</div><div class="stat-label" data-i18n="grade"></div></div><div class="stat-card" style="cursor:pointer" onclick="showMyCertificates()"><div class="stat-icon" style="background:var(--info)"><i class="fas fa-certificate"></i></div><div class="stat-value">'+getStudentCertStatus(user.id)+'</div><div class="stat-label" data-i18n="certificates"></div></div></div>';html+='<div class="section-header"><h3 data-i18n="quickActions"></h3></div>';html+='<div class="quick-actions"><button class="quick-action" onclick="navigateTo(\'assignments\')"><div class="qa-icon" style="background:var(--warning)"><i class="fas fa-book-open"></i></div><span data-i18n="assignments"></span></button><button class="quick-action" onclick="navigateTo(\'events\')"><div class="qa-icon" style="background:var(--success)"><i class="fas fa-calendar-alt"></i></div><span data-i18n="events"></span></button><button class="quick-action" onclick="showMyBookings()"><div class="qa-icon" style="background:var(--accent)"><i class="fas fa-ticket-alt"></i></div><span data-i18n="myBookings"></span></button><button class="quick-action" onclick="showMyCertificates()"><div class="qa-icon" style="background:var(--info)"><i class="fas fa-certificate"></i></div><span data-i18n="myCertificates"></span></button>';
+  var sVidOk=!!user.videoRecordingEnabled;
+  html+='<button class="quick-action" onclick="openStudentVideoRecorder()" style="position:relative">'+(sVidOk?'':'<i class="fas fa-lock" style="position:absolute;top:4px;right:8px;font-size:0.65rem;color:var(--text-light)"></i>')+'<div class="qa-icon" style="background:var(--danger);'+(sVidOk?'':'opacity:0.45')+'"><i class="fas fa-video"></i></div><span style="'+(sVidOk?'':'color:var(--text-light)')+'">Record Video</span></button></div>';html+='<div class="card"><div class="card-header"><h3 data-i18n="myProfile"></h3></div><div class="card-body"><div class="list-item" style="border-bottom:none;cursor:default"><div class="list-avatar">'+user.name.charAt(0)+'</div><div class="list-content"><div class="list-title">'+esc(user.name)+'</div><div class="list-subtitle">'+t("classGroup")+': '+(user.classGroup?('<b>'+esc(user.classGroup)+'</b>'):'<span style="color:var(--warning)">Pending assignment</span>')+' | '+t("teacher")+': '+myTeacher+'</div></div></div><div style="margin-top:10px"><div style="font-size:0.75rem;color:var(--text-light);margin-bottom:4px" data-i18n="assignmentProgress"></div><div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div><div style="font-size:0.7rem;color:var(--text-light);text-align:right">65% '+t("complete")+'</div></div></div></div>';html+='<div class="section-header"><h3 data-i18n="upcomingAssignments"></h3><a href="#" class="see-all" onclick="navigateTo(\'assignments\');return false" data-i18n="viewAll"></a></div>';html+='<div class="card">';var pending=DB.assignments.filter(function(a){return a.status==="Active"}).slice(0,3);if(pending.length===0)html+=emptyState("noAssignments");else pending.forEach(function(a){html+=renderAssignmentPreview(a)});html+='</div>'}$('mainContent').innerHTML=html;applyTranslations();}
+
+function renderUserRow(u,isAdmin){
+  var html='<div class="list-item" '+(isAdmin?'onclick="editStudent(\''+u.id+'\')"':'')+'>';
+  html+='<div class="list-avatar">'+u.name.charAt(0)+'</div>';
+  html+='<div class="list-content"><div class="list-title">'+esc(u.name)+'</div><div class="list-subtitle">'+(u.nationality||"")+' | '+u.classGroup+(u.classID?' <span style="color:var(--primary);font-family:monospace">['+esc(u.classID)+']</span>':'')+' | '+u.mobile+'</div></div>';
+  html+='<div class="list-meta">';
+  if(isAdmin){
+    html+='<div style="display:flex;gap:4px;justify-content:flex-end;margin-bottom:4px">';
+    html+='<button class="btn btn-icon btn-sm" style="background:'+(u.videoRecordingEnabled?'var(--success)':'var(--bg)')+';color:'+(u.videoRecordingEnabled?'white':'var(--text-light)')+'" title="'+(u.videoRecordingEnabled?'Video recording ON - tap to disable':'Video recording OFF - tap to enable')+'" onclick="event.stopPropagation();toggleUserVideoPermission(\''+u.id+'\')"><i class="fas fa-video"></i></button>';
+    html+='<button class="btn btn-icon btn-sm" style="background:var(--info);color:white" onclick="event.stopPropagation();editStudent(\''+u.id+'\')"><i class="fas fa-edit"></i></button>';
+    html+='<button class="btn btn-icon btn-sm" style="background:var(--warning);color:white" onclick="event.stopPropagation();openResetPwModal(\''+u.id+'\')"><i class="fas fa-key"></i></button>';
+    html+='<button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="event.stopPropagation();confirmDelete(\'student\',\''+u.id+'\')"><i class="fas fa-trash"></i></button>';
+    html+='</div>';
+  }
+  html+='<span class="ass-status badge-'+(u.status==='Approved'?'active':(u.status==='Rejected'?'inactive':'pending'))+'">'+u.status+'</span>';
+  html+='</div></div>';
+  return html;
+}
 
 function renderAssignmentPreview(a){var html='<div class="assignment-card">';html+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';html+='<div><div class="ass-title">'+esc(a.title)+'</div>';html+='<div class="ass-meta">'+a.type+' | '+t("due")+': '+formatDate(a.closeDate)+'</div>';if(a.closeDate)html+='<div class="ass-meta" style="color:'+(isClosed(a.closeDate)?'var(--danger)':'var(--success)')+'"><i class="fas fa-clock"></i> '+(isClosed(a.closeDate)?t("closed"):t("autoCloseEnabled"))+': '+formatDateTime(a.closeDate)+'</div>';html+='</div></div>';html+='<span class="ass-status badge-pending">'+t("pending")+'</span>';html+='</div>';return html}
 
@@ -4321,6 +4791,104 @@ function pushNotification(title,body,type,page,userIds){
   updateNotifBadge();
 }
 
+function openStudentVideoRecorder(){
+  var user=DB.currentUser;
+  if(!user||!user.videoRecordingEnabled){
+    showToast('Video recording not authorized. Ask your teacher to enable it.','error');
+    return;
+  }
+  var vp=$('videoPreview'),vpl=$('videoPlayback'),vph=$('videoPlaceholder');
+  var vt=$('videoRecTimer'),vs=$('videoRecStatus'),vl=$('videoList');
+  if(vp)vp.style.display='none';
+  if(vpl)vpl.style.display='none';
+  if(vph)vph.style.display='block';
+  if(vt)vt.textContent='00:00';
+  if(vs)vs.textContent=t('readyToRecord')||'Ready to record';
+  if(vl)vl.innerHTML='';
+  videoBlob=null;
+  window._studentVideoMode=true;
+  openModal('videoRecorderModal');
+}
+
+function saveStudentVideo(){
+  if(!videoBlob){showToast('No video recorded','error');return;}
+  var user=DB.currentUser;if(!user)return;
+  var reader=new FileReader();
+  reader.onload=function(){
+    var rec={
+      id:generateId('SV'),
+      studentId:user.id,studentName:user.name,
+      classGroup:user.classGroup||'',
+      videoData:reader.result,
+      submittedAt:new Date().toISOString(),
+      status:'Pending Review'
+    };
+    if(!DB.studentVideos)DB.studentVideos=[];
+    DB.studentVideos.push(rec);
+    saveDBLocalOnly();
+    fbSaveRecord('studentVideos',rec,'Video submitted for review!',null);
+    if(user.teacher&&typeof pushNotification==='function'){
+      pushNotification('New Student Video',user.name+' submitted a video for review.','info','dashboard',[user.teacher]);
+    }
+    closeModal('videoRecorderModal');
+    window._studentVideoMode=false;
+  };
+  reader.readAsDataURL(videoBlob);
+}
+
+function showStudentVideosModal(){
+  var user=DB.currentUser;if(!user)return;
+  var vids=(DB.studentVideos||[]);
+  if(user.role==='Teacher'){
+    vids=vids.filter(function(v){
+      var s=DB.users.find(function(u){return u.id===v.studentId;});
+      return s&&s.teacher===user.id;
+    });
+  }
+  vids=vids.slice().sort(function(a,b){return(b.submittedAt||'').localeCompare(a.submittedAt||'');});
+  var html='';
+  if(!vids.length){
+    html='<div style="text-align:center;padding:30px;color:var(--text-light)"><i class="fas fa-video" style="font-size:2rem;opacity:0.3;display:block;margin-bottom:8px"></i>No student videos submitted yet</div>';
+  } else {
+    vids.forEach(function(v){
+      var pendingBadge=v.status==='Pending Review'?'<span class="badge badge-warning">Pending</span>':'<span class="badge badge-success">'+esc(v.status)+'</span>';
+      html+='<div class="card" style="margin-bottom:10px"><div class="card-body">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+      html+='<div><strong>'+esc(v.studentName)+'</strong><div style="font-size:0.75rem;color:var(--text-light)">'+(v.classGroup||'')+' • '+formatDate((v.submittedAt||'').slice(0,10))+'</div></div>';
+      html+=pendingBadge;
+      html+='</div>';
+      html+='<video controls style="width:100%;max-height:240px;border-radius:8px;background:#000" src="'+v.videoData+'"></video>';
+      if(v.status==='Pending Review'){
+        html+='<div style="display:flex;gap:8px;margin-top:8px">';
+        html+='<button class="btn btn-success btn-sm" style="flex:1" onclick="markStudentVideoReviewed(\''+v.id+'\',\'Reviewed\')"><i class="fas fa-check"></i> Mark Reviewed</button>';
+        html+='</div>';
+      }
+      html+='</div></div>';
+    });
+  }
+  var modal=document.getElementById('studentVideosModal');
+  if(!modal){
+    var div=document.createElement('div');
+    div.id='studentVideosModal';
+    div.className='modal-overlay';
+    div.innerHTML='<div class="modal-content" style="max-width:600px"><div class="modal-header"><h3><i class="fas fa-video"></i> Student Video Submissions</h3><button class="modal-close" onclick="closeModal(\'studentVideosModal\')"><i class="fas fa-times"></i></button></div><div class="modal-body" id="studentVideosBody"></div><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal(\'studentVideosModal\')">Close</button></div></div>';
+    document.body.appendChild(div);
+  }
+  document.getElementById('studentVideosBody').innerHTML=html;
+  openModal('studentVideosModal');
+}
+
+function markStudentVideoReviewed(videoId,newStatus){
+  var v=(DB.studentVideos||[]).find(function(x){return x.id===videoId;});
+  if(!v)return;
+  v.status=newStatus;
+  fbSaveRecord('studentVideos',v,'Marked as reviewed','');
+  showStudentVideosModal();
+  if(typeof pushNotification==='function'){
+    pushNotification('Video Reviewed','Your submitted video has been reviewed by your teacher.','info','dashboard',[v.studentId]);
+  }
+}
+
 function saveSubmission(){
   var a=DB.assignments.find(function(x){return x.id===currentSubmissionAssId;});
   if(!a){showToast('Assignment not found','error');return;}
@@ -4448,6 +5016,7 @@ function openStudentModal(e2){
         if($('studentGender'))$('studentGender').value=u.gender||'';
         if($('studentClassGroup'))$('studentClassGroup').value=u.classGroup||'';
         if($('studentStatus'))$('studentStatus').value=u.status||'Pending';
+        var vp=$('studentVideoPermission');if(vp)vp.checked=!!u.videoRecordingEnabled;
       } else {
         $('studentModalTitle').innerHTML='<i class="fas fa-user-plus"></i> '+t('addStudent');
         $('studentName').value='';$('studentMobile').value='';
@@ -4455,6 +5024,7 @@ function openStudentModal(e2){
         if($('studentNationality'))$('studentNationality').value='';
         if($('studentGender'))$('studentGender').value='';
         if($('studentStatus'))$('studentStatus').value='Pending';
+        var vp2=$('studentVideoPermission');if(vp2)vp2.checked=false;
       }
       populateAssClassGroup();
     }catch(e){console.warn('openStudentModal:',e.message);}
@@ -4479,7 +5049,21 @@ function updateQuestionTrans(qbId,lang,val){var q=questionBuilders.find(function
 
 function addFamilyMember(){currentFamilyMembers.push({name:'',gender:'',ageGroup:''});renderFamilyMembers();var eventId=$('eventRegEventId').value;var event=DB.events.find(function(e){return e.id===eventId});updateRegTotals(event?event.fee:0)}
 function cancelBooking(regId){$('deleteConfirmText').textContent=t('cancelBookingConfirm');$('deleteConfirmBtn').onclick=function(){var reg=DB.eventRegistrations.find(function(r){return r.id===regId});if(reg){var ev=DB.events.find(function(e){return e.id===reg.eventId});if(ev)ev.registered-=reg.totalSeats}DB.eventRegistrations=DB.eventRegistrations.filter(function(r){return r.id!==regId});saveDB();closeModal('deleteModal');showToast(t('bookingCancelled'),'success');showMyBookings();renderEvents()};openModal('deleteModal')}
-function confirmEventRegistration(){var eventId=$('eventRegEventId').value;var event=DB.events.find(function(e){return e.id===eventId});var user=DB.currentUser;if(!event||!user)return;for(var i=0;i<currentFamilyMembers.length;i++){if(!currentFamilyMembers[i].name||!currentFamilyMembers[i].gender||!currentFamilyMembers[i].ageGroup){showToast(t('fillRequired'),'error');return}}var totalSeats=1+currentFamilyMembers.length;if(totalSeats>(event.capacity-event.registered)){showToast(t('notEnoughSeats'),'error');return}var members=[{name:user.name,gender:user.gender,ageGroup:user.classGroup}];currentFamilyMembers.forEach(function(m){members.push(m)});var ticketNo='TICK-'+String(Date.now()).slice(-6);var regData={id:generateId('ER'),eventId:eventId,studentId:user.id,members:members,totalSeats:totalSeats,status:'Waiting for Confirmation',bookingDate:new Date().toISOString().slice(0,10),ticketNo:ticketNo};var nusukVal=$('nusukRef').value.trim();if(nusukVal)regData.nusukRef=nusukVal;DB.eventRegistrations.push(regData);event.registered+=totalSeats;saveDB();showToast(t('bookingConfirmed')+' Ticket: '+ticketNo,'success');addAudit('EVENT_REGISTER',user.name+' registered for '+event.name);closeModal('eventRegModal');renderEvents();setTimeout(function(){showTicket(DB.eventRegistrations[DB.eventRegistrations.length-1].id)},500)}
+function confirmEventRegistration(){var eventId=$('eventRegEventId').value;var event=DB.events.find(function(e){return e.id===eventId});var user=DB.currentUser;if(!event||!user)return;for(var i=0;i<currentFamilyMembers.length;i++){if(!currentFamilyMembers[i].name||!currentFamilyMembers[i].gender||!currentFamilyMembers[i].ageGroup){showToast(t('fillRequired'),'error');return}}var totalSeats=1+currentFamilyMembers.length;if(totalSeats>(event.capacity-event.registered)){showToast(t('notEnoughSeats'),'error');return}var members=[{name:user.name,gender:user.gender,ageGroup:user.classGroup}];currentFamilyMembers.forEach(function(m){members.push(m)});var ticketNo='TICK-'+String(Date.now()).slice(-6);var regData={id:generateId('ER'),eventId:eventId,studentId:user.id,members:members,totalSeats:totalSeats,status:(function(){
+      // Auto-approve free events for students; paid events may need admin approval based on settings
+      var autoApprove=(DB.settings&&DB.settings.autoApproveRegistrations!==false); // default true
+      if(event.type==='Free'||autoApprove)return 'Confirmed';
+      return 'Waiting for Confirmation';
+    })(),bookingDate:new Date().toISOString().slice(0,10),ticketNo:ticketNo};var nusukVal=$('nusukRef').value.trim();if(nusukVal)regData.nusukRef=nusukVal;DB.eventRegistrations.push(regData);event.registered+=totalSeats;saveDB();if(regData.status==='Confirmed'){
+      showToast('✅ '+(t('bookingConfirmed')||'Booking confirmed')+'! Ticket: '+ticketNo,'success');
+    } else {
+      showToast((t('bookingPending')||'Booking submitted, pending approval')+'. Ticket: '+ticketNo,'success');
+      // Notify admins only when manual approval is needed
+      var _admins=(DB.users||[]).filter(function(u){return u.role==='Admin';}).map(function(u){return u.id;});
+      if(_admins.length&&typeof pushNotification==='function'){
+        pushNotification('Event Registration Pending',user.name+' registered for '+event.name+' — awaiting approval.','info','events',_admins);
+      }
+    }addAudit('EVENT_REGISTER',user.name+' registered for '+event.name);closeModal('eventRegModal');renderEvents();setTimeout(function(){showTicket(DB.eventRegistrations[DB.eventRegistrations.length-1].id)},500)}
 function openComposeMessage(){var user=DB.currentUser;var html='<div class="section-header"><h3 data-i18n="newMessage"></h3><button class="btn btn-outline btn-sm" onclick="renderMessages()"><i class="fas fa-arrow-left"></i> '+t("back")+'</button></div>';html+='<div class="card"><div class="card-body">';html+='<div class="form-group"><label class="form-label" data-i18n="to"></label><select class="form-select" id="composeTo"><option value="">'+t("selectRecipient")+'</option>';if(user.role==="Admin"){html+='<optgroup label="'+t("broadcastGroups")+'"><option value="ALL_TEACHERS">'+t("allTeachers")+'</option><option value="ALL_STUDENTS">'+t("allStudents")+'</option><option value="EVERYONE">'+t("everyone")+'</option></optgroup>';html+='<optgroup label="'+t("individualTeachers")+'">';DB.users.forEach(function(u){if(u.id!==user.id&&u.role==="Teacher")html+='<option value="'+u.id+'">'+esc(u.name)+'</option>'});html+='</optgroup>';html+='<optgroup label="'+t("individualStudents")+'">';DB.users.forEach(function(u){if(u.id!==user.id&&u.role==="Student")html+='<option value="'+u.id+'">'+esc(u.name)+'</option>'});html+='</optgroup>'}else{DB.users.forEach(function(u){if(u.id!==user.id)html+='<option value="'+u.id+'">'+esc(u.name)+' ('+u.role+')</option>'})}html+='</select></div>';html+='<div class="form-group"><label class="form-label" data-i18n="subject"></label><input type="text" class="form-input" id="composeSubject"></div>';html+='<div class="form-group"><label class="form-label" data-i18n="content"></label><textarea class="form-textarea" id="composeContent" rows="4"></textarea></div>';html+='<button class="btn btn-primary btn-block" onclick="sendComposeMessage()"><i class="fas fa-paper-plane"></i> '+t("send")+'</button>';html+='</div></div>';$("mainContent").innerHTML=html;applyTranslations()}
 function openEventRegistration(eventId){var event=DB.events.find(function(e){return e.id===eventId});if(!event)return;var user=DB.currentUser;var existing=DB.eventRegistrations.find(function(r){return r.eventId===eventId&&r.studentId===user.id});if(existing){showToast(t("alreadyRegistered"),"warning");return}$('eventRegEventId').value=eventId;$('eventRegEventName').textContent=event.name;$('eventRegEventDetails').innerHTML='<i class="fas fa-calendar"></i> '+formatDate(event.date)+' <i class="fas fa-clock" style="margin:0 8px"></i>'+event.time+' <i class="fas fa-map-marker-alt" style="margin:0 8px"></i>'+event.venue;$('regMainName').value=user.name+' ('+user.classGroup+')';var isPilgrimage=event.type==='Umrah Package'||event.type==='Hajj Package'||event.name.toLowerCase().indexOf('umrah')>=0||event.name.toLowerCase().indexOf('hajj')>=0;$('nusukRefWrap').style.display=isPilgrimage?'block':'none';if(isPilgrimage){$('nusukRef').value=''}currentFamilyMembers=[];renderFamilyMembers();updateRegTotals(event.fee);openModal('eventRegModal')}
 function openMessageThread(otherUserId){var user=DB.currentUser;var other=DB.users.find(function(u){return u.id===otherUserId});if(!other)return;var thread=DB.messages.filter(function(m){return(m.from===user.id&&m.to===otherUserId)||(m.from===otherUserId&&m.to===user.id)});thread.sort(function(a,b){return new Date(a.date)-new Date(b.date)});var html='<div class="section-header"><h3><i class="fas fa-user-circle" style="color:var(--primary);margin-right:6px"></i>'+esc(other.name)+'</h3><button class="btn btn-outline btn-sm" onclick="renderMessages()"><i class="fas fa-arrow-left"></i> '+t("back")+'</button></div>';html+='<div class="card"><div class="card-body">';html+='<div class="msg-thread">';if(thread.length===0)html+='<div style="text-align:center;color:var(--text-light);font-size:0.8rem;padding:20px">'+t("noMessages")+'</div>';else thread.forEach(function(m){var isSent=m.from===user.id;html+='<div class="msg-bubble '+(isSent?'sent':'received')+'">';if(m.subject&&!isSent)html+='<div style="font-weight:600;font-size:0.75rem;margin-bottom:4px">'+esc(m.subject)+'</div>';html+=esc(m.content);html+='<div class="msg-time">'+formatDate(m.date)+'</div></div>'});html+='</div>';html+='<div class="msg-input-row"><input type="text" class="form-input" id="replyInput" placeholder="'+t("typeMessage")+'" onkeypress="if(event.key===\'Enter\')sendReply(\''+otherUserId+'\')"><button class="btn btn-primary" onclick="sendReply(\''+otherUserId+'\')"><i class="fas fa-paper-plane"></i></button></div>';html+='</div></div>';$("mainContent").innerHTML=html}
@@ -4942,12 +5526,12 @@ function toggleEventFee(){$('eventFeeWrap').style.display=$('eventType').value==
 function populateTeacherSelect(selId){var sel=$(selId);sel.innerHTML='<option value="">'+t('selectTeacher')+'</option>';DB.users.filter(function(u){return u.role==='Teacher'}).forEach(function(t){sel.innerHTML+='<option value="'+t.id+'">'+esc(t.name)+'</option>'})}
 
 // ===================== TEACHER ACCOUNT MANAGEMENT =====================
-function renderTeacherAccountsList(){var teachers=DB.users.filter(function(u){return u.role==='Teacher'});var badge=$('teacherCountBadge');if(badge)badge.textContent=teachers.length+' teacher'+(teachers.length!==1?'s':'');var html='';if(teachers.length===0){html=emptyState('noTeachers')}else{html='<div style="overflow-x:auto"><table style="width:100%;font-size:0.8rem;border-collapse:collapse"><thead><tr style="background:var(--primary);color:white"><th style="padding:8px;text-align:left">Name</th><th style="padding:8px">Username</th><th style="padding:8px">Mobile</th><th style="padding:8px">Classes</th><th style="padding:8px">Status</th><th style="padding:8px">Actions</th></tr></thead><tbody>';teachers.forEach(function(t){var stCls=t.status==='Active'?'badge-active':'badge-inactive';html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">'+esc(t.name)+'</td>';html+='<td style="padding:8px;text-align:center;font-family:monospace;font-size:0.75rem">'+(t.username||t.mobile)+'</td>';html+='<td style="padding:8px;text-align:center">'+t.mobile+'</td>';html+='<td style="padding:8px;text-align:center;font-size:0.7rem">'+(t.classGroup||'-')+'</td>';html+='<td style="padding:8px;text-align:center"><span class="ass-status '+stCls+'" style="font-size:0.65rem;cursor:pointer" onclick="toggleTeacherStatus(\''+t.id+'\')">'+t.status+'</span></td>';html+='<td style="padding:8px;text-align:center"><div style="display:flex;gap:4px;justify-content:center">';html+='<button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:0.7rem" onclick="editTeacherAcct(\''+t.id+'\')" title="Edit"><i class="fas fa-edit"></i></button>';html+='<button class="btn btn-warning btn-sm" style="padding:4px 8px;font-size:0.7rem" onclick="openResetTeacherPw(\''+t.id+'\')" title="Reset PW"><i class="fas fa-key"></i></button>';html+='<button class="btn btn-danger btn-sm" style="padding:4px 8px;font-size:0.7rem" onclick="delTeacherAcct(\''+t.id+'\')" title="Delete"><i class="fas fa-trash"></i></button>';html+='</div></td></tr>'});html+='</tbody></table></div>'}$('teacherAccountsList').innerHTML=html}
-function openTeacherAccountModal(){$('teacherAcctEditId').value='';$('teacherAcctModalTitle').innerHTML='<i class="fas fa-user-plus"></i> Add Teacher';$('teacherAcctName').value='';$('teacherAcctMobile').value='';$('teacherAcctEmail').value='';$('teacherAcctUsername').value='';$('teacherAcctPassword').value='';$('tacctChild').checked=false;$('tacctTeen').checked=false;$('tacctAdlt').checked=false;$('teacherAcctStatus').value='Active';$('teacherPwWrap').style.display='block';openModal('teacherAccountModal')}
+function renderTeacherAccountsList(){var teachers=DB.users.filter(function(u){return u.role==='Teacher'});var badge=$('teacherCountBadge');if(badge)badge.textContent=teachers.length+' teacher'+(teachers.length!==1?'s':'');var html='';if(teachers.length===0){html=emptyState('noTeachers')}else{html='<div style="overflow-x:auto"><table style="width:100%;font-size:0.8rem;border-collapse:collapse"><thead><tr style="background:var(--primary);color:white"><th style="padding:8px;text-align:left">Name</th><th style="padding:8px">Username</th><th style="padding:8px">Mobile</th><th style="padding:8px">Classes</th><th style="padding:8px">Status</th><th style="padding:8px">Actions</th></tr></thead><tbody>';teachers.forEach(function(t){var stCls=t.status==='Active'?'badge-active':'badge-inactive';html+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">'+esc(t.name)+'</td>';html+='<td style="padding:8px;text-align:center;font-family:monospace;font-size:0.75rem">'+(t.username||t.mobile)+'</td>';html+='<td style="padding:8px;text-align:center">'+t.mobile+'</td>';html+='<td style="padding:8px;text-align:center;font-size:0.7rem">'+(t.classGroup||'-')+'</td>';html+='<td style="padding:8px;text-align:center"><span class="ass-status '+stCls+'" style="font-size:0.65rem;cursor:pointer" onclick="toggleTeacherStatus(\''+t.id+'\')">'+t.status+'</span></td>';html+='<td style="padding:8px;text-align:center"><div style="display:flex;gap:4px;justify-content:center">';html+='<button class="btn btn-sm" style="padding:4px 8px;font-size:0.7rem;background:'+(t.videoRecordingEnabled?'var(--success)':'var(--bg)')+';color:'+(t.videoRecordingEnabled?'white':'var(--text-light)')+'" onclick="toggleUserVideoPermission(\''+t.id+'\')" title="'+(t.videoRecordingEnabled?'Video+Broadcast ON':'Video+Broadcast OFF')+' - tap to toggle"><i class="fas fa-video"></i></button>';html+='<button class="btn btn-primary btn-sm" style="padding:4px 8px;font-size:0.7rem" onclick="editTeacherAcct(\''+t.id+'\')" title="Edit"><i class="fas fa-edit"></i></button>';html+='<button class="btn btn-warning btn-sm" style="padding:4px 8px;font-size:0.7rem" onclick="openResetTeacherPw(\''+t.id+'\')" title="Reset PW"><i class="fas fa-key"></i></button>';html+='<button class="btn btn-danger btn-sm" style="padding:4px 8px;font-size:0.7rem" onclick="delTeacherAcct(\''+t.id+'\')" title="Delete"><i class="fas fa-trash"></i></button>';html+='</div></td></tr>'});html+='</tbody></table></div>'}$('teacherAccountsList').innerHTML=html}
+function openTeacherAccountModal(){$('teacherAcctEditId').value='';$('teacherAcctModalTitle').innerHTML='<i class="fas fa-user-plus"></i> Add Teacher';$('teacherAcctName').value='';$('teacherAcctMobile').value='';$('teacherAcctEmail').value='';$('teacherAcctUsername').value='';$('teacherAcctPassword').value='';$('tacctChild').checked=false;$('tacctTeen').checked=false;$('tacctAdlt').checked=false;$('teacherAcctStatus').value='Active';$('teacherPwWrap').style.display='block';var tvp2=$('teacherVideoPermission');if(tvp2)tvp2.checked=false;openModal('teacherAccountModal')}
 function generateTeacherPw(){var pw=Math.random().toString(36).slice(2,6)+Math.floor(10+Math.random()*90);$('teacherAcctPassword').value=pw}
 function genResetPw(){var pw=Math.random().toString(36).slice(2,6)+Math.floor(10+Math.random()*90);$('teacherResetPwVal').value=pw}
-function saveTeacherAcct(){var editId=$('teacherAcctEditId').value;var name=$('teacherAcctName').value.trim();var mobile=$('teacherAcctMobile').value.trim();var username=$('teacherAcctUsername').value.trim();var password=$('teacherAcctPassword').value;if(!name||!mobile){showToast('Name and mobile required','error');return}if(!editId&&!password){showToast('Password required','error');return}if(!username)username=mobile;var classes=[];if($('tacctChild').checked)classes.push('Children');if($('tacctTeen').checked)classes.push('Teenage');if($('tacctAdlt').checked)classes.push('Adult');var exists=DB.users.find(function(u){return u.id!==editId&&(u.mobile===mobile||u.username===username)});if(exists){showToast('Mobile or username already exists','error');return}var data={id:editId||generateId('T'),name:name,mobile:mobile,email:$('teacherAcctEmail').value.trim(),username:username,classGroup:classes.join(', '),role:'Teacher',status:$('teacherAcctStatus').value,gender:'Male',nationality:'',teacher:''};if(editId){var ex=DB.users.find(function(u){return u.id===editId});if(ex)data.password=password?hashPassword(password):ex.password;}else{data.password=hashPassword(password);}addAudit('TEACHER_ACCOUNT',(editId?'Updated':'Created')+': '+name);closeModal('teacherAccountModal');fbSaveRecord('users',data,'Teacher saved ✅',renderTeacherAccountsList);}
-function editTeacherAcct(id){var t=DB.users.find(function(u){return u.id===id});if(!t)return;$('teacherAcctEditId').value=t.id;$('teacherAcctModalTitle').innerHTML='<i class="fas fa-edit"></i> Edit Teacher';$('teacherAcctName').value=t.name;$('teacherAcctMobile').value=t.mobile;$('teacherAcctEmail').value=t.email||'';$('teacherAcctUsername').value=t.username||t.mobile||'';var classes=(t.classGroup||'').split(', ');$('tacctChild').checked=classes.indexOf('Children')>=0;$('tacctTeen').checked=classes.indexOf('Teenage')>=0;$('tacctAdlt').checked=classes.indexOf('Adult')>=0;$('teacherAcctStatus').value=t.status||'Active';$('teacherPwWrap').style.display='none';openModal('teacherAccountModal')}
+function saveTeacherAcct(){var editId=$('teacherAcctEditId').value;var name=$('teacherAcctName').value.trim();var mobile=$('teacherAcctMobile').value.trim();var username=$('teacherAcctUsername').value.trim();var password=$('teacherAcctPassword').value;if(!name||!mobile){showToast('Name and mobile required','error');return}if(!editId&&!password){showToast('Password required','error');return}if(!username)username=mobile;var classes=[];if($('tacctChild').checked)classes.push('Children');if($('tacctTeen').checked)classes.push('Teenage');if($('tacctAdlt').checked)classes.push('Adult');var exists=DB.users.find(function(u){return u.id!==editId&&(u.mobile===mobile||u.username===username)});if(exists){showToast('Mobile or username already exists','error');return}var data={id:editId||generateId('T'),name:name,mobile:mobile,email:$('teacherAcctEmail').value.trim(),username:username,classGroup:classes.join(', '),role:'Teacher',status:$('teacherAcctStatus').value,gender:'Male',nationality:'',teacher:'',videoRecordingEnabled:$('teacherVideoPermission')?$('teacherVideoPermission').checked:false};if(editId){var ex=DB.users.find(function(u){return u.id===editId});if(ex)data.password=password?hashPassword(password):ex.password;}else{data.password=hashPassword(password);}addAudit('TEACHER_ACCOUNT',(editId?'Updated':'Created')+': '+name);closeModal('teacherAccountModal');fbSaveRecord('users',data,'Teacher saved ✅',renderTeacherAccountsList);}
+function editTeacherAcct(id){var t=DB.users.find(function(u){return u.id===id});if(!t)return;$('teacherAcctEditId').value=t.id;$('teacherAcctModalTitle').innerHTML='<i class="fas fa-edit"></i> Edit Teacher';$('teacherAcctName').value=t.name;$('teacherAcctMobile').value=t.mobile;$('teacherAcctEmail').value=t.email||'';$('teacherAcctUsername').value=t.username||t.mobile||'';var classes=(t.classGroup||'').split(', ');$('tacctChild').checked=classes.indexOf('Children')>=0;$('tacctTeen').checked=classes.indexOf('Teenage')>=0;$('tacctAdlt').checked=classes.indexOf('Adult')>=0;$('teacherAcctStatus').value=t.status||'Active';$('teacherPwWrap').style.display='none';var tvp=$('teacherVideoPermission');if(tvp)tvp.checked=!!t.videoRecordingEnabled;openModal('teacherAccountModal')}
 function toggleTeacherStatus(id){var t=DB.users.find(function(u){return u.id===id});if(!t)return;t.status=t.status==='Active'?'Inactive':'Active';saveDB();showToast(t.name+' is now '+t.status,'success');addAudit('TEACHER_STATUS',t.name+' -> '+t.status);renderTeacherAccountsList()}
 function openResetTeacherPw(id){var t=DB.users.find(function(u){return u.id===id});if(!t)return;$('teacherResetId').value=t.id;$('teacherResetName').textContent=t.name;$('teacherResetPwVal').value='';openModal('teacherResetPwModal')}
 function doResetTeacherPw(){var id=$('teacherResetId').value;var pw=$('teacherResetPwVal').value;if(!pw||pw.length<6){showToast('Password min 6 chars','error');return}var t=DB.users.find(function(u){return u.id===id});if(t){t.password=hashPassword(pw);saveDB();showToast('Password reset for '+t.name,'success');addAudit('TEACHER_RESET_PW',t.name);closeModal('teacherResetPwModal');renderTeacherAccountsList()}}
@@ -4957,7 +5541,7 @@ function approveTeacherCert(certId){var cert=DB.certificates.find(function(c){re
 function rejectTeacherCert(certId){var cert=DB.certificates.find(function(c){return c.id===certId});if(!cert)return;cert.status='Rejected';saveDB();showToast('Certificate rejected','success');addAudit('CERT_REJECT','Teacher rejected cert: '+certId);renderTeacherCertificateApproval()}
 window.openMyProfile=openMyProfile;window.saveMyProfile=saveMyProfile;window.renderTeacherCertificateApproval=renderTeacherCertificateApproval;window.approveTeacherCert=approveTeacherCert;window.rejectTeacherCert=rejectTeacherCert;window.renderTeacherAccountsList=renderTeacherAccountsList;window.openTeacherAccountModal=openTeacherAccountModal;window.saveTeacherAcct=saveTeacherAcct;window.editTeacherAcct=editTeacherAcct;window.toggleTeacherStatus=toggleTeacherStatus;window.openResetTeacherPw=openResetTeacherPw;window.doResetTeacherPw=doResetTeacherPw;window.delTeacherAcct=delTeacherAcct;
 // ======================================================================
-function saveStudent(){var editId=$('studentEditId').value;var name=$('studentName').value.trim();var mobile=$('studentMobile').value.trim();if(!name||!mobile){showToast(t('fillRequired'),'error');return}var data={id:editId||generateId('S'),name:name,mobile:mobile,email:$('studentEmail').value.trim(),nationality:$('studentNationality').value,classGroup:$('studentClassGroup').value,gender:$('studentGender').value,teacher:$('studentTeacher').value,status:$('studentStatus').value,role:'Student'};if(editId){var ex=DB.users.find(function(u){return u.id===editId});if(ex)data.password=ex.password||'student123';}else{data.password='student123';}addAudit('STUDENT_SAVE','Saved student: '+name);clearDraft('studentModal');closeModal('studentModal');fbSaveRecord('users',data,'Student saved ✅',renderDashboard);}
+function saveStudent(){var editId=$('studentEditId').value;var name=$('studentName').value.trim();var mobile=$('studentMobile').value.trim();if(!name||!mobile){showToast(t('fillRequired'),'error');return}var data={id:editId||generateId('S'),name:name,mobile:mobile,email:$('studentEmail').value.trim(),nationality:$('studentNationality').value,classGroup:$('studentClassGroup').value,gender:$('studentGender').value,teacher:$('studentTeacher').value,status:$('studentStatus').value,videoRecordingEnabled:$('studentVideoPermission')?$('studentVideoPermission').checked:false,role:'Student'};if(editId){var ex=DB.users.find(function(u){return u.id===editId});if(ex)data.password=ex.password||'student123';}else{data.password='student123';}addAudit('STUDENT_SAVE','Saved student: '+name);clearDraft('studentModal');closeModal('studentModal');fbSaveRecord('users',data,'Student saved ✅',renderDashboard);}
 function saveTeacher(){var editIdEl=$('teacherEditId'),nameEl=$('teacherName'),mobileEl=$('teacherMobile'),emailEl=$('teacherEmail'),tChild=$('tclassChildren'),tTeen=$('tclassTeenage'),tAdult=$('tclassAdult');if(!editIdEl||!nameEl||!mobileEl){showToast('Teacher form is not available','error');return}var editId=editIdEl.value;var name=nameEl.value.trim();var mobile=mobileEl.value.trim();if(!name||!mobile){showToast(t('fillRequired'),'error');return}var classes=[];if(tChild&&tChild.checked)classes.push('Children');if(tTeen&&tTeen.checked)classes.push('Teenage');if(tAdult&&tAdult.checked)classes.push('Adult');var data={id:editId||generateId('T'),name:name,mobile:mobile,email:emailEl?emailEl.value.trim():'',classGroup:classes.join(', '),password:'teacher123',role:'Teacher',status:'Active'};if(editId){var idx=DB.users.findIndex(function(u){return u.id===editId});if(idx>=0)DB.users[idx]=Object.assign({},DB.users[idx],data)}else DB.users.push(data);saveDB();showToast(t('saved'),'success');addAudit('TEACHER_SAVE','Saved teacher: '+name);var tm=$('teacherModal');if(tm)closeModal('teacherModal');else closeModal('teacherMgmtModal');renderDashboard()}
 async function saveAssignment(){var editId=$("assignmentEditId").value;var title=$("assTitle").value.trim();if(!title){showToast(t("fillRequired"),"error");return;}if(typeof autoTranslateAllQuestions==="function")await autoTranslateAllQuestions();var questions=questionBuilders.map(function(qb){return{id:qb.id||generateId("Q"),text:qb.textEn||qb.text||"",type:qb.type||"mcq",options:qb.type==="mcq"?(qb.options||[]):[],optionsTa:qb.type==="mcq"?(qb.optionsTa||[]):[],optionsSi:qb.type==="mcq"?(qb.optionsSi||[]):[],correct:qb.correct||0,textEn:qb.textEn||qb.text||"",textTa:qb.textTa||"",textSi:qb.textSi||""};});var attachData="",attachName="";var fi=$("assAttachment");if(fi&&fi.files&&fi.files[0]){var file=fi.files[0];if(file.size>5242880){showToast("File too large (max 5MB)","error");return;}attachName=file.name;attachData=await new Promise(function(res){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.readAsDataURL(file);});}var subTypes=["text","pdf","image","audio","video"].filter(function(t2){var el=$("sub"+t2.charAt(0).toUpperCase()+t2.slice(1));return el&&el.checked;});if(!subTypes.length)subTypes=["text"];var assignment={id:editId||generateId("A"),title:title,type:($("assType")&&$("assType").value)||"Weekly",classGroup:($("assClassGroup")&&$("assClassGroup").value)||"All",startDate:($("assStartDate")&&$("assStartDate").value)||"",dueDate:($("assDueDate")&&$("assDueDate").value)||"",closeDate:($("assCloseDate")&&$("assCloseDate").value)||"",totalMarks:parseInt(($("assMarks")&&$("assMarks").value)||100),maxAttempts:parseInt(($("assMaxAttempts")&&$("assMaxAttempts").value)||3),description:($("assDesc")&&$("assDesc").value.trim())||"",status:'Active',allowedSubmissionTypes:subTypes,questions:questions,recordings:(typeof recordings!=="undefined"?recordings:[]).map(function(r){return{name:r.name,date:r.date,url:r.url||""};})};if(attachData){assignment.attachmentData=attachData;assignment.attachmentName=attachName;}else if(editId){var oldA=DB.assignments.find(function(x){return x.id===editId;});if(oldA&&oldA.attachmentData){assignment.attachmentData=oldA.attachmentData;assignment.attachmentName=oldA.attachmentName||"";}}var isNew=!editId;await fbSaveRecord("assignments",assignment,t("assignmentSaved"),renderAssignments);if(isNew&&typeof notifyAllUsers==="function")notifyAllUsers("New Assignment: "+title,assignment.description||"A new assignment has been posted","assignments","assignments");addAudit(isNew?"ASS_CREATE":"ASS_UPDATE",(isNew?"Created: ":"Updated: ")+title);closeModal("assignmentModal");}
 function saveEvent(){var editId=$('eventEditId').value;var name=$('eventName').value.trim();var date=$('eventDate').value;if(!name||!date){showToast(t('fillRequired'),'error');return}var fc=$('eventFeeChild'),ft=$('eventFeeTeen'),fa=$('eventFeeAdult');var ro3=$('eventRegOpenDate'),rc3=$('eventRegCloseDate');var data={id:editId||generateId('E'),name:name,desc:$('eventDesc').value.trim(),date:date,time:$('eventTime').value,venue:$('eventVenue').value.trim(),type:$('eventType').value,fee:parseInt($('eventFee').value)||0,feeChild:fc?parseInt(fc.value)||0:0,feeTeen:ft?parseInt(ft.value)||0:0,feeAdult:fa?parseInt(fa.value)||0:0,capacity:parseInt($('eventCapacity').value)||0,registered:0,photo:$('eventPhotoData').value||'',regOpenDate:ro3?ro3.value:'',regCloseDate:rc3?rc3.value:''};if(editId){var ex=DB.events.find(function(e){return e.id===editId});if(ex){data.registered=ex.registered;if(!data.photo)data.photo=ex.photo||'';}}addAudit('EVENT_SAVE','Saved event: '+name);$('eventPhotoPreview').style.display='none';$('eventPhotoData').value='';clearDraft('eventModal');closeModal('eventModal');fbSaveRecord('events',data,'Event saved ✅',currentPage==='events'?renderEvents:renderDashboard);}
@@ -5004,6 +5588,8 @@ function showSettings(){
   // Load cert settings
   try{var cr=$('setCertRequired');if(cr)cr.value=s.certRequiredAssignments||4;}catch(e){}
   try{var cp=$('setCertPass');if(cp)cp.value=s.certPassPercent||60;}catch(e){}
+  var aa=$('setAutoApprove');if(aa)aa.checked=(s.autoApproveRegistrations!==false);
+  var aas=$('setAutoApproveStudents');if(aas)aas.checked=(s.autoApproveStudents!==false);
   // Open modal FIRST so DOM elements are visible
   openModal('settingsModal');
   // Then initialise things that need visible DOM (canvases, lists)
@@ -5017,6 +5603,8 @@ function showSettings(){
   }, 50);
 }
 function saveSettings(){var logoData=$('setLogoData').value;DB.settings.orgName=$('setOrgName').value;DB.settings.sectionName=$('setSectionName').value;DB.settings.sessionTimeout=parseInt($('setTimeout').value)||30;DB.settings.auditLog=$('setAuditLog').checked;
+var aa3=$('setAutoApprove');if(aa3)DB.settings.autoApproveRegistrations=aa3.checked;
+var aas2=$('setAutoApproveStudents');if(aas2)DB.settings.autoApproveStudents=aas2.checked;
 DB.settings.classGroups=(DB.settings.classGroups||[]);if(logoData)DB.settings.logoData=logoData;DB.settings.contactInfo={person:$('setContactPerson').value.trim(),phone:$('setContactPhone').value.trim(),email:$('setContactEmail').value.trim(),address:$('setContactAddress').value.trim()};var ejsSid=$('setEmailJsServiceId'),ejsTid=$('setEmailJsTemplateId'),ejsPk=$('setEmailJsPublicKey'),cmbKey=$('setCallMeBotApiKey');if(ejsSid)EMAILJS_CONFIG.serviceId=ejsSid.value.trim()||EMAILJS_CONFIG.serviceId;if(ejsTid)EMAILJS_CONFIG.templateId=ejsTid.value.trim()||EMAILJS_CONFIG.templateId;if(ejsPk)EMAILJS_CONFIG.publicKey=ejsPk.value.trim()||EMAILJS_CONFIG.publicKey;if(cmbKey)CALLMEBOT_CONFIG.apiKey=cmbKey.value.trim();DB.settings.otpConfig={emailJsServiceId:EMAILJS_CONFIG.serviceId,emailJsTemplateId:EMAILJS_CONFIG.templateId,emailJsPublicKey:EMAILJS_CONFIG.publicKey,callMeBotApiKey:CALLMEBOT_CONFIG.apiKey};DB.settings=DB.settings||{};saveDBLocalOnly();saveSocialSettings();saveCertSigSettings();applyLogo();addAudit('SETTINGS_SAVE','Updated settings');closeModal('settingsModal');
 // Save settings to Firebase as a single document with id='portal_settings'
 var settingsDoc=Object.assign({},DB.settings,{id:'portal_settings'});
@@ -5048,6 +5636,12 @@ function escXml(str){return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
 // ===================== VIDEO RECORDING =====================
 var videoMediaRecorder=null,videoChunks=[],videoBlob=null,isVideoRecording=false,videoTimerInterval=null,videoSeconds=0;
 function openVideoRecorder(){
+  var user=DB.currentUser;
+  // Admins always have access; Teachers need videoRecordingEnabled set by admin
+  if(user&&user.role==='Teacher'&&!user.videoRecordingEnabled){
+    showToast('Video recording not authorized for your account. Ask admin to enable it.','error');
+    return;
+  }
   var vp=$('videoPreview'),vpl=$('videoPlayback'),vph=$('videoPlaceholder');
   var vt=$('videoRecTimer'),vs=$('videoRecStatus'),vl=$('videoList');
   if(vp)vp.style.display='none';
@@ -5057,13 +5651,26 @@ function openVideoRecorder(){
   if(vs)vs.textContent=t('readyToRecord');
   if(vl)vl.innerHTML='';
   videoBlob=null;
+  window._studentVideoMode=false;
   openModal('videoRecorderModal');
 }
 function toggleVideoRecording(){if(isVideoRecording)stopVideoRecording();else startVideoRecording()}
 function startVideoRecording(){navigator.mediaDevices.getUserMedia({video:true,audio:true}).then(function(stream){$('videoPlaceholder').style.display='none';$('videoPreview').style.display='block';$('videoPreview').srcObject=stream;$('videoPlayback').style.display='none';videoMediaRecorder=new MediaRecorder(stream);videoChunks=[];videoMediaRecorder.ondataavailable=function(e){if(e.data.size>0)videoChunks.push(e.data)};videoMediaRecorder.onstop=function(){videoBlob=new Blob(videoChunks,{type:'video/webm'});$('videoPreview').style.display='none';$('videoPlayback').style.display='block';$('videoPlayback').src=URL.createObjectURL(videoBlob);$('videoPlayback').srcObject=null;$('videoRecStatus').textContent=t('recordingSaved')};videoMediaRecorder.start();isVideoRecording=true;$('videoRecBtn').innerHTML='<i class="fas fa-stop"></i>';$('videoRecBtn').style.background='var(--danger)';$('videoRecBtn').classList.add('recording');videoSeconds=0;videoTimerInterval=setInterval(function(){videoSeconds++;var m=String(Math.floor(videoSeconds/60)).padStart(2,'0');var s=String(videoSeconds%60).padStart(2,'0');$('videoRecTimer').textContent=m+':'+s},1000);$('videoRecStatus').textContent=t('recording')}).catch(function(err){showToast(t('cameraDenied')+': '+err.message,'error')})}
 function stopVideoRecording(){if(videoMediaRecorder&&videoMediaRecorder.state!=='inactive'){videoMediaRecorder.stop();videoMediaRecorder.stream.getTracks().forEach(function(t){t.stop()})}isVideoRecording=false;$('videoRecBtn').innerHTML='<i class="fas fa-circle"></i>';$('videoRecBtn').style.background='var(--danger)';$('videoRecBtn').classList.remove('recording');if(videoTimerInterval){clearInterval(videoTimerInterval);videoTimerInterval=null}}
 function handleVideoUpload(input){var file=input.files[0];if(!file)return;videoBlob=file;var url=URL.createObjectURL(file);$('videoPlaceholder').style.display='none';$('videoPreview').style.display='none';$('videoPlayback').style.display='block';$('videoPlayback').src=url;$('videoRecStatus').textContent=t('videoUploaded')}
-function saveVideoRecording(){if(!videoBlob){showToast(t('noRecording'),'warning');return}var reader=new FileReader();reader.onloadend=function(){var vid={id:generateId('VID'),title:'Recording '+formatDate(new Date().toISOString().slice(0,10)),dataUrl:reader.result,size:videoBlob.size,date:new Date().toISOString().slice(0,10),createdBy:DB.currentUser.id};if(!DB.videos)DB.videos=[];DB.videos.push(vid);saveDB();showToast(t('saved'),'success');addAudit('VIDEO_SAVE','Saved video: '+vid.id);closeModal('videoRecorderModal')};reader.readAsDataURL(videoBlob)}
+function saveVideoRecording(){
+  if(!videoBlob){showToast(t('noRecording')||'No recording','warning');return;}
+  if(window._studentVideoMode){saveStudentVideo();return;}
+  var reader=new FileReader();
+  reader.onloadend=function(){
+    var vid={id:generateId('VID'),title:'Recording '+formatDate(new Date().toISOString().slice(0,10)),dataUrl:reader.result,size:videoBlob.size,date:new Date().toISOString().slice(0,10),createdBy:DB.currentUser.id};
+    if(!DB.videos)DB.videos=[];
+    DB.videos.push(vid);saveDB();showToast(t('saved')||'Saved','success');
+    addAudit('VIDEO_SAVE','Saved video: '+vid.id);
+    closeModal('videoRecorderModal');
+  };
+  reader.readAsDataURL(videoBlob);
+}
 
 // ===================== AUTO-CORRECTION =====================
 function autoCorrectSubmission(subId,subObj){var sub=subObj||DB.submissions.find(function(s){return s.id===subId});if(!sub)return;var a=DB.assignments.find(function(x){return x.id===sub.assignmentId});if(!a||!a.questions)return;sub.answers.forEach(function(ans){var q=a.questions.find(function(xq){return xq.id===ans.questionId});if(!q)return;if(q.type==='mcq'){var correctIdx=parseInt(q.correct);var studentIdx=parseInt(ans.answer);if(!isNaN(correctIdx)&&!isNaN(studentIdx)&&correctIdx===studentIdx)ans.isCorrect=true;else ans.isCorrect=false}else if(q.type==='truefalse'){var correctVal=q.correctTF!==undefined?q.correctTF:(q.correct===0);var studentVal=parseInt(ans.answer)===0;ans.isCorrect=correctVal===studentVal}else{ans.isCorrect=null}});var correctCount=sub.answers.filter(function(a){return a.isCorrect===true}).length;var totalGradable=a.questions.filter(function(q){return q.type==='mcq'||q.type==='truefalse'}).length;if(totalGradable>0){var autoMarks=Math.round((correctCount/totalGradable)*a.marks);sub.marks=autoMarks;sub.totalMarks=a.marks;if(autoMarks>=a.marks*0.5)sub.grade='P';else sub.grade='F';sub.status='Auto-Graded'}saveDB();
@@ -5318,6 +5925,11 @@ function dismissPWA(){hidePWABanner();localStorage.setItem(pwaDismissedKey,'1')}
 // ===================== FEATURE 1: LIVE BROADCAST =====================
 var currentBcTargetUserId='';
 function openBroadcastModal(){
+  var user=DB.currentUser;
+  if(user&&user.role==='Teacher'&&!user.videoRecordingEnabled){
+    showToast('Broadcast not authorized for your account. Ask admin to enable it.','error');
+    return;
+  }
   openModal('broadcastModal');
   setTimeout(function(){
     try{
@@ -5399,6 +6011,17 @@ function setFormData(modalId,data){var fields=FORM_FIELD_MAP[modalId];if(!fields
 
 window.addEventListener('beforeunload',function(e){if(window._formDirty){e.preventDefault();e.returnValue='You have unsaved changes. Are you sure you want to leave?'}});
 document.addEventListener('DOMContentLoaded',async function(){
+  try{
+    var lastVer=localStorage.getItem('jdc_app_version');
+    if(lastVer&&lastVer!==APP_VERSION){
+      console.log('[Update] '+lastVer+' -> '+APP_VERSION);
+      localStorage.setItem('jdc_app_version',APP_VERSION);
+      if('caches' in window){caches.keys().then(function(n){n.forEach(function(x){caches.delete(x);});});}
+      if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});}
+    } else if(!lastVer){
+      localStorage.setItem('jdc_app_version',APP_VERSION);
+    }
+  }catch(e){}
   // Move all modals to body to avoid stacking context issues
   document.querySelectorAll('.modal-overlay').forEach(function(m){
     if(m.parentElement !== document.body) document.body.appendChild(m);
@@ -5416,25 +6039,50 @@ document.addEventListener('DOMContentLoaded',async function(){
   try{setupDraftListeners();}catch(e){}
   // Show correct screen
   if(DB.currentUser){
+    // Returning logged-in user: skip dua splash, go straight to dashboard
     $('duaScreen').classList.add('hidden');
     $('authScreen').classList.add('hidden');
     $('mainApp').classList.remove('hidden');
     navigateTo('dashboard');
     updateNotifBadge();
   } else {
-    $('duaScreen').classList.add('hidden');
-    $('authScreen').classList.remove('hidden');
+    // Fresh visit / logged-out user: show the dua splash first (once per browser session)
     $('mainApp').classList.add('hidden');
+    var duaSeen=sessionStorage.getItem('jdc_dua_seen');
+    if(duaSeen){
+      $('duaScreen').classList.add('hidden');
+      $('authScreen').classList.remove('hidden');
+    } else {
+      $('authScreen').classList.add('hidden');
+      $('duaScreen').classList.remove('hidden');
+    }
     try{showAuthLangSwitcher();}catch(e){}
     // Pre-populate class groups on auth screen
     setTimeout(function(){if(typeof populateAssClassGroup==='function')populateAssClassGroup();},300);
   }
   try{startAutoSync();}catch(e){}
+  setInterval(checkForAppUpdate,60000);
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden)checkForAppUpdate();
+  });
 });
 </script>
 
 <!-- ALL REGISTRATIONS MODAL -->
 <div id="allRegsModal" class="modal-overlay"><div class="modal-content" style="max-width:760px"><div class="modal-header"><h3><i class="fas fa-list"></i> All Registrations</h3><button class="modal-close" onclick="closeModal('allRegsModal')"><i class="fas fa-times"></i></button></div><div class="modal-body" id="allRegsBody" style="padding:0"></div><div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('allRegsModal')">Close</button></div></div></div>
+
+<div id="diagButton" style="position:fixed;bottom:10px;right:10px;z-index:99996;background:#666;color:white;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,0.3)" onclick="runDiagnostic()" title="Run diagnostic test">
+  <i class="fas fa-stethoscope"></i>
+</div>
+<div id="diagPanel" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:white;border-radius:12px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0;font-size:1.1rem"><i class="fas fa-stethoscope"></i> System Diagnostic</h3>
+      <button onclick="document.getElementById('diagPanel').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer">&times;</button>
+    </div>
+    <div id="diagContent" style="font-family:monospace;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;background:#f5f5f5;padding:12px;border-radius:8px"></div><button onclick="resetAdminPassword()" style="margin-top:12px;width:100%;padding:10px;background:#c0392b;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer"><i class="fas fa-key"></i> Force Reset Admin Password to admin123</button>
+  </div>
+</div>
 </body>
 </html  var _nt=Date.now();if(window._lmid===id&&_nt-(window._lmt||0)<400)return;window._lmid=id;window._lmt=_nt;
 function closeModal(id){
