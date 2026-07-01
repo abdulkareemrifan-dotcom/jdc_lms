@@ -3830,9 +3830,14 @@ async function pushNotification(title, body, category, page, targetUserIds){
         url: window.location.origin,
         ttl: 259200
       }, audience))
-    }).then(function(r){ return r.json(); }).then(function(d){
-      if(d.errors) console.warn('OneSignal errors:', d.errors);
-      else console.log('OneSignal push sent to', d.recipients, 'recipients ✅');
+    }).then(function(r){
+      return r.text().then(function(t){
+        console.log('OneSignal HTTP status:', r.status, 'response:', t.slice(0,300));
+        try{ var d=JSON.parse(t);
+          if(d.errors) console.warn('OneSignal errors:', JSON.stringify(d.errors));
+          else console.log('OneSignal push sent to', d.recipients, 'recipients ✅');
+        }catch(e){ console.warn('OneSignal non-JSON response:', t.slice(0,200)); }
+      });
     }).catch(function(e){ console.warn('OneSignal push error:', e); });
   }
   return notif;
