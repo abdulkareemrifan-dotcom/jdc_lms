@@ -3582,11 +3582,15 @@ async function requestNotifPermission(){
 
 // ── Get FCM token and save to user's Firebase doc ─────────────────
 async function getFCMToken(){
-  if(!window._fcmMessaging||!window._swRegistration)return;
+  if(!window._fcmMessaging)return;
   try{
+    // navigator.serviceWorker.ready resolves only once a SW is fully
+    // active — this avoids the "no active Service Worker" race condition
+    // that happens when getToken() is called too soon after register().
+    var activeSWReg = await navigator.serviceWorker.ready;
     var token = await window.getTokenFCM(window._fcmMessaging, {
       vapidKey: FCM_VAPID_KEY,
-      serviceWorkerRegistration: window._swRegistration
+      serviceWorkerRegistration: activeSWReg
     });
     if(token && DB.currentUser){
       var user = DB.currentUser;
