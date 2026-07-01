@@ -3795,7 +3795,8 @@ async function pushNotification(title, body, category, page, targetUserIds){
     targetUsers = DB.users.filter(function(u){return targetUserIds.includes(u.id) && u.id!==senderId;});
   }
 
-  // Deliver background push via Vercel /api/push (same-origin, no CORS issues)
+  // Deliver background push via Cloudflare Worker (free, reliable)
+  var WORKER_URL = 'https://exportdefaultasyncfetchrequestenvconsth.abdulkareem-rifan.workers.dev';
   var pushPayload = { title: title, body: body };
   if(!targetUserIds || targetUserIds === 'all'){
     pushPayload.targetAll = true;
@@ -3806,7 +3807,7 @@ async function pushNotification(title, body, category, page, targetUserIds){
   } else if(Array.isArray(targetUserIds) && targetUserIds.length){
     pushPayload.externalIds = targetUserIds;
   }
-  fetch('/api/push', {
+  fetch(WORKER_URL, {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
     body: JSON.stringify(pushPayload)
