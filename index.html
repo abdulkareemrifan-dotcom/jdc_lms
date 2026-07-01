@@ -5636,7 +5636,8 @@ function saveProfile(){var user=DB.currentUser;if(!user)return;user.name=$('prof
 function showNotifications(){var user=DB.currentUser;var mine=myNotifications().slice().reverse();
 var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
 html+='<button class="btn btn-outline btn-sm" onclick="closeModal(\'notificationsPanel\');navigateTo(\'notifPrefs\')"><i class="fas fa-sliders-h"></i> Notification Settings</button>';
-if(mine.length>0) html+='<button class="btn btn-sm" style="background:var(--danger);color:white" onclick="clearAllMyNotifications()"><i class="fas fa-trash"></i> Clear All</button>';
+var clearLabel=user&&user.role==='Admin'?'<i class="fas fa-trash"></i> Delete All (Everyone)':'<i class="fas fa-check-double"></i> Mark All Read';
+if((DB.notifications||[]).length>0) html+='<button class="btn btn-sm" style="background:var(--danger);color:white" onclick="clearAllMyNotifications()">'+clearLabel+'</button>';
 html+='</div>';
 if(mine.length===0)html+=emptyState('noNotifications');
 else{mine.forEach(function(n){var navTarget=n.page||getNotifTarget(n.title);var read=notifIsRead(n,user);html+='<div class="list-item" style="border-bottom:1px solid var(--border);cursor:pointer" onclick="handleNotifClick(\''+n.id+'\',\''+navTarget+'\')">';html+='<div class="list-avatar" style="background:'+(read?'var(--text-light)':'var(--accent)')+'"><i class="fas fa-bell"></i></div>';html+='<div class="list-content"><div class="list-title">'+esc(n.title)+'</div><div class="list-subtitle">'+esc(n.body||n.message||'')+'</div></div>';html+='<div class="list-meta">'+formatDate(n.date)+'</div></div>'});}
@@ -5646,15 +5647,27 @@ function handleNotifClick(notifId,target){markNotifRead(notifId);closeModal('not
 async function clearAllMyNotifications(){
   var user=DB.currentUser;if(!user)return;
   var mine=myNotifications();
-  mine.forEach(function(n){
-    _shownNotifIds.add(n.id);
-    if(!n.readBy)n.readBy=[];
-    if(!n.readBy.includes(user.id)){
-      n.readBy.push(user.id);
-      n.read=true;
-      fbSaveRecord('notifications',n,null,null);
+  if(user.role==='Admin'){
+    // Admin: hard-delete every notification from Firestore — gone for everyone
+    var all=DB.notifications||[];
+    showToast('Deleting all notifications...','info');
+    for(var i=0;i<all.length;i++){
+      _shownNotifIds.add(all[i].id);
+      await fbDelete('notifications',all[i].id);
     }
-  });
+    DB.notifications=[];
+  } else {
+    // Regular user: mark all as read for themselves only
+    mine.forEach(function(n){
+      _shownNotifIds.add(n.id);
+      if(!n.readBy)n.readBy=[];
+      if(!n.readBy.includes(user.id)){
+        n.readBy.push(user.id);
+        n.read=true;
+        fbSaveRecord('notifications',n,null,null);
+      }
+    });
+  }
   updateNotifBadge();
   if('clearAppBadge' in navigator) navigator.clearAppBadge().catch(function(){});
   closeModal('notificationsPanel');
