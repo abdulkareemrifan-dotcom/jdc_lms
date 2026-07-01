@@ -19,6 +19,13 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
+// Force the SW to activate immediately rather than waiting for all
+// existing tabs to close — this is what allows FCM's getToken() to
+// find an "active" SW on first load, even if a previous SW version
+// was already registered (e.g. the old blob-based one).
+self.addEventListener('install', function(e){ e.waitUntil(self.skipWaiting()); });
+self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
+
 // Keep this identical to the firebaseConfig object inside index.html.
 firebase.initializeApp({
   apiKey: "AIzaSyBiOPwNCQ1uDCENaevuusTQ_S3iwDfjan0",

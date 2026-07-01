@@ -3584,20 +3584,35 @@ async function requestNotifPermission(){
 async function getFCMToken(){
   if(!window._fcmMessaging)return;
   try{
-    // navigator.serviceWorker.ready resolves only once a SW is fully
-    // active — this avoids the "no active Service Worker" race condition
-    // that happens when getToken() is called too soon after register().
-    var activeSWReg = await navigator.serviceWorker.ready;
+    // Wait for ANY active SW to be ready first
+    await navigator.serviceWorker.ready;
+    // Then specifically get the firebase-messaging-sw.js registration,
+    // since FCM requires push to be tied to that specific worker
+    var reg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+    if(!reg){
+      // Fallback: re-register explicitly and wait for it to activate
+      reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      await navigator.serviceWorker.ready;
+    }
+    // If the SW exists but is still installing/waiting, give it a moment
+    if(reg.installing || reg.waiting){
+      await new Promise(function(resolve){
+        var sw = reg.installing || reg.waiting;
+        sw.addEventListener('statechange', function onState(){
+          if(sw.state === 'activated'){ sw.removeEventListener('statechange', onState); resolve(); }
+        });
+        setTimeout(resolve, 3000); // safety timeout
+      });
+    }
     var token = await window.getTokenFCM(window._fcmMessaging, {
       vapidKey: FCM_VAPID_KEY,
-      serviceWorkerRegistration: activeSWReg
+      serviceWorkerRegistration: reg
     });
     if(token && DB.currentUser){
       var user = DB.currentUser;
       if(!user.fcmTokens)user.fcmTokens=[];
       if(!user.fcmTokens.includes(token)){
         user.fcmTokens.push(token);
-        // Keep max 5 tokens per user
         if(user.fcmTokens.length>5)user.fcmTokens=user.fcmTokens.slice(-5);
         var userRec = DB.users.find(function(u){return u.id===user.id;});
         if(userRec){
