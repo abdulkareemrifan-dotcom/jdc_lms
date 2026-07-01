@@ -1,59 +1,52 @@
-// Minimal test — if this crashes, Vercel isn't recognising the api/ folder
-module.exports = function(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
+// Vercel Edge Function — runs on V8, always has fetch, no Node.js version issues
+export const config = { runtime: 'edge' };
 
-  var body = req.body || {};
-  var title = body.title || 'JDC-LMS';
-  var message = body.body || '';
-  var appId = process.env.ONESIGNAL_APP_ID || '';
-  var apiKey = process.env.ONESIGNAL_REST_API_KEY || '';
-
-  if (!appId || !apiKey) {
-    res.status(500).json({ error: 'Missing env vars', appId: !!appId, apiKey: !!apiKey });
-    return;
-  }
-
-  var https = require('https');
-  var isNewKey = apiKey.indexOf('os_v2_') === 0;
-  var payload = JSON.stringify({
-    app_id: appId,
-    included_segments: ['Total Subscriptions'],
-    headings: { en: title },
-    contents: { en: message },
-    ttl: 259200
-  });
-
-  var options = {
-    hostname: 'onesignal.com',
-    path: '/api/v1/notifications',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': (isNewKey ? 'Key ' : 'Basic ') + apiKey,
-      'Content-Length': Buffer.byteLength(payload)
-    }
+export default async function handler(req) {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json'
   };
 
-  var request = https.request(options, function(r) {
-    var data = '';
-    r.on('data', function(c) { data += c; });
-    r.on('end', function() {
-      try {
-        var d = JSON.parse(data);
-        if (d.errors) res.status(400).json({ error: d.errors, raw: data });
-        else res.status(200).json({ sent: d.recipients || 0, id: d.id });
-      } catch(e) {
-        res.status(500).json({ error: 'Parse failed', raw: data.slice(0, 300) });
-      }
+  if (req.method === 'OPTIONS') return new Response('ok', { status: 200, headers });
+  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers });
+
+  const appId = process.env.ONESIGNAL_APP_ID;
+  const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+  if (!appId || !apiKey) return new Response(JSON.stringify({ error: 'Missing env vars' }), { status: 500, headers });
+
+  let body = {};
+  try { body = await req.json(); } catch(e) {}
+
+  const title = body.title || 'JDC-LMS';
+  const message = body.body || '';
+  const isNewKey = apiKey.startsWith('os_v2_');
+
+  let audience;
+  if (body.externalIds && body.externalIds.length) {
+    audience = { include_external_user_ids: body.externalIds, channel_for_external_user_ids: 'push' };
+  } else if (body.targetRole === 'Student' || body.targetRole === 'Teacher') {
+    audience = { filters: [{ field: 'tag', key: 'role', relation: '=', value: body.targetRole }] };
+  } else {
+    audience = { included_segments: ['Total Subscriptions'] };
+  }
+
+  try {
+    const r = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': (isNewKey ? 'Key ' : 'Basic ') + apiKey
+      },
+      body: JSON.stringify(Object.assign({ app_id: appId, headings: { en: title }, contents: { en: message }, ttl: 259200 }, audience))
     });
-  });
-
-  request.on('error', function(e) {
-    res.status(500).json({ error: e.message });
-  });
-
-  request.write(payload);
-  request.end();
-};
+    const text = await r.text();
+    let data;
+    try { data = JSON.parse(text); } catch(e) { return new Response(JSON.stringify({ error: text.slice(0,200) }), { status: 500, headers }); }
+    if (data.errors) return new Response(JSON.stringify({ error: data.errors }), { status: 400, headers });
+    return new Response(JSON.stringify({ sent: data.recipients || 0, id: data.id }), { status: 200, headers });
+  } catch(e) {
+    return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+  }
+}
