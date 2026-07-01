@@ -3666,7 +3666,9 @@ function safePrint(html, title){
 // PUSH_NOTIFICATIONS_SETUP.md).
 // ── OneSignal push permission ─────────────────────────────────────
 // All OneSignal SDK calls go through OneSignalManager (centralized wrapper).
-var ONESIGNAL_APP_ID = 'fd7b6da3-dc80-473d-9c4c-99433c028205'; // kept for Vercel /api/push reference
+var ONESIGNAL_APP_ID = 'fd7b6da3-dc80-473d-9c4c-99433c028205';
+// Paste your OneSignal REST API Key here (Settings → Keys & IDs → Legacy API Key)
+var ONESIGNAL_REST_KEY = 'os_v2_app_7v5w3i64qbdt3hcmtfbtyaucavuksyfousvui5fke2kyesu45f2udmd3wsb475jdbiorvbmzc7or47aogvbe3tjbne3ia37onahhbuq';
 
 // Notification categories with default enabled state
 var NOTIF_CATEGORIES = {
@@ -3793,39 +3795,46 @@ async function pushNotification(title, body, category, page, targetUserIds){
     targetUsers = DB.users.filter(function(u){return targetUserIds.includes(u.id) && u.id!==senderId;});
   }
 
-  // Build OneSignal push payload
-  var pushPayload = { title: title, body: body, page: page || 'dashboard' };
-  var senderId = DB.currentUser ? DB.currentUser.id : '';
-
-  if (!targetUserIds || targetUserIds === 'all') {
-    pushPayload.targetAll = true;
-  } else if (targetUserIds === 'students') {
-    pushPayload.targetRole = 'Student';
-  } else if (targetUserIds === 'teachers') {
-    pushPayload.targetRole = 'Teacher';
-  } else if (Array.isArray(targetUserIds)) {
-    // Filter out sender, respect per-user category preference
-    var ids = targetUserIds.filter(function(uid){
-      if(uid === senderId) return false;
-      var u = DB.users.find(function(x){ return x.id === uid; });
-      if(!u) return false;
-      var prefs = u.notifPrefs || {};
-      return prefs[category||'announcements'] !== false;
-    });
-    pushPayload.externalIds = ids;
-  } else {
-    pushPayload.targetAll = true;
+  // Deliver background push directly via OneSignal REST API
+  if(ONESIGNAL_REST_KEY && ONESIGNAL_REST_KEY !== 'PASTE_YOUR_REST_API_KEY_HERE'){
+    var audience;
+    if(!targetUserIds || targetUserIds === 'all'){
+      audience = { included_segments: ['Total Subscriptions'] };
+    } else if(targetUserIds === 'students'){
+      audience = { filters: [{ field:'tag', key:'role', relation:'=', value:'Student' }] };
+    } else if(targetUserIds === 'teachers'){
+      audience = { filters: [{ field:'tag', key:'role', relation:'=', value:'Teacher' }] };
+    } else if(Array.isArray(targetUserIds) && targetUserIds.length){
+      audience = { include_external_user_ids: targetUserIds, channel_for_external_user_ids: 'push' };
+    } else {
+      audience = { included_segments: ['Total Subscriptions'] };
+    }
+    // os_v2_app_ keys use the new API endpoint with 'Key' auth (not 'Basic')
+    var isNewKey = ONESIGNAL_REST_KEY.indexOf('os_v2_') === 0;
+    var apiUrl = isNewKey
+      ? 'https://api.onesignal.com/notifications'
+      : 'https://onesignal.com/api/v1/notifications';
+    var authHeader = isNewKey
+      ? 'Key ' + ONESIGNAL_REST_KEY
+      : 'Basic ' + ONESIGNAL_REST_KEY;
+    fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify(Object.assign({
+        app_id: ONESIGNAL_APP_ID,
+        headings: { en: title },
+        contents: { en: body || '' },
+        url: window.location.origin,
+        ttl: 259200
+      }, audience))
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(d.errors) console.warn('OneSignal errors:', d.errors);
+      else console.log('OneSignal push sent to', d.recipients, 'recipients ✅');
+    }).catch(function(e){ console.warn('OneSignal push error:', e); });
   }
-
-  // Deliver background push via Vercel /api/push → OneSignal
-  fetch('/api/push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(pushPayload)
-  }).then(function(r){ return r.json(); }).then(function(d){
-    console.log('Push sent via OneSignal:', d);
-  }).catch(function(e){ console.warn('Push delivery error:', e); });
-
   return notif;
 }
 
