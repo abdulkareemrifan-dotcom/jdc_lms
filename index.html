@@ -18,24 +18,146 @@
   <meta http-equiv="Expires" content="0">
 <title>JDC-LMS | Jeddah Dawah Center – Tamil Section</title>
 <script>
-// ══ JDC-LMS Notification Handler ══
-// Registers the REAL service worker file (firebase-messaging-sw.js), which
-// MUST be deployed as its own static file at the SITE ROOT alongside this
-// index.html (e.g. https://yourdomain.com/firebase-messaging-sw.js) — see
-// PUSH_NOTIFICATIONS_SETUP.md for the full deployment checklist.
-//
-// This SW handles push delivery while the app is closed or backgrounded,
-// plus notification-click navigation. Foreground (app open) notifications
-// are handled separately, later in this file, via Firestore real-time sync
-// — see handleIncomingNotif().
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/firebase-messaging-sw.js').then(function(reg){
-    window._swRegistration = reg;
-    console.log('Service worker registered ✅', reg.scope);
-  }).catch(function(e){
-    console.warn('Service worker registration failed (background push will not work):', e.message);
-    window._swRegistration = null;
-  });
+// ══ JDC-LMS — Centralized OneSignal Manager ══════════════════════
+// All OneSignal SDK interactions go through this single object.
+// No direct OneSignal SDK calls anywhere else in the codebase.
+
+var OneSignalManager = (function(){
+  var APP_ID = 'fd7b6da3-dc80-473d-9c4c-99433c028205';
+  var _verificationShown = !!localStorage.getItem('_osVerified'); // persists across page loads
+
+  // ── Subscription verification ────────────────────────────────────
+  // Follows the Push Subscription Verification requirements from the
+  // OneSignal SDK integration guide: show a dialog exactly once when
+  // the device receives a real, server-assigned subscription ID (non-
+  // empty and NOT prefixed with "local-"). Evaluate both on change
+  // AND immediately at observer-registration time, since the ID may
+  // already be assigned before the observer attaches.
+  function isRegistered(id){
+    return !!id && id !== '' && id.indexOf('local-') !== 0;
+  }
+
+  function evaluateSubscriptionId(id){
+    if(!isRegistered(id) || _verificationShown) return;
+    _verificationShown = true;
+    localStorage.setItem('_osVerified', '1');
+    // Save the player ID to the current user's Firestore doc
+    _savePlayerId(id);
+    // Show the required "integration complete" confirmation dialog
+    if(window.showOneSignalVerificationDialog) window.showOneSignalVerificationDialog();
+  }
+
+  function _savePlayerId(id){
+    if(!id || !window.DB || !DB.currentUser) return;
+    var user = DB.currentUser;
+    if(!user.oneSignalIds) user.oneSignalIds = [];
+    if(user.oneSignalIds.indexOf(id) >= 0) return;
+    user.oneSignalIds.push(id);
+    if(user.oneSignalIds.length > 5) user.oneSignalIds = user.oneSignalIds.slice(-5);
+    var rec = DB.users && DB.users.find(function(u){return u.id===user.id;});
+    if(rec){
+      rec.oneSignalIds = user.oneSignalIds;
+      if(window.fbSaveRecord) fbSaveRecord('users', rec, null, null);
+    }
+    console.log('OneSignal player ID saved ✅', id);
+  }
+
+  // ── Public interface ─────────────────────────────────────────────
+  return {
+    initialize: function(){
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(function(OneSignal){
+        OneSignal.init({
+          appId: APP_ID,
+          notifyButton: { enable: false }, // we use our own Enable Now button
+          allowLocalhostAsSecureOrigin: false,
+        }).then(function(){
+          console.log('OneSignal initialized ✅');
+          // Register subscription observer and evaluate current ID immediately
+          OneSignal.User.PushSubscription.addEventListener('change', function(e){
+            evaluateSubscriptionId(e.current && e.current.id);
+          });
+          evaluateSubscriptionId(OneSignal.User.PushSubscription.id);
+        });
+      });
+    },
+
+    // Call after a user logs in — links their LMS user ID to their device
+    login: function(externalId){
+      if(!externalId) return;
+      OneSignalDeferred.push(function(OneSignal){
+        OneSignal.login(String(externalId)).then(function(){
+          console.log('OneSignal login ✅', externalId);
+          // Save ID in case it was already assigned before login
+          evaluateSubscriptionId(OneSignal.User.PushSubscription.id);
+        }).catch(function(e){ console.warn('OneSignal login error:', e); });
+      });
+    },
+
+    // Call on logout
+    logout: function(){
+      OneSignalDeferred.push(function(OneSignal){
+        OneSignal.logout();
+      });
+    },
+
+    // Request push permission (called from "Enable Now" button and from
+    // the verification dialog's "Got it" button)
+    requestPermission: function(){
+      return new Promise(function(resolve){
+        OneSignalDeferred.push(function(OneSignal){
+          OneSignal.Notifications.requestPermission(function(accepted){
+            if(accepted){
+              evaluateSubscriptionId(OneSignal.User.PushSubscription.id);
+            }
+            resolve(accepted);
+          });
+        });
+      });
+    },
+
+    // Tag a user for segmentation in the OneSignal dashboard
+    setTag: function(key, value){
+      OneSignalDeferred.push(function(OneSignal){
+        OneSignal.User.addTag(key, String(value));
+      });
+    },
+
+    // Get the current player ID synchronously (may be null before registration)
+    getPlayerId: function(){
+      return (window.OneSignal && OneSignal.User && OneSignal.User.PushSubscription)
+        ? OneSignal.User.PushSubscription.id : null;
+    }
+  };
+})();
+
+// Show the push subscription verification dialog (required by the SDK guide).
+// Appears exactly once when the device gets a real server-assigned subscription ID.
+window.showOneSignalVerificationDialog = function(){
+  // Build a lightweight native-style modal
+  var overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = '<div style="background:white;border-radius:16px;max-width:340px;width:100%;padding:28px 24px;font-family:inherit;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3)">'
+    + '<div style="font-size:2rem;margin-bottom:12px">🔔</div>'
+    + '<h3 style="margin:0 0 12px;font-size:1.1rem;color:#095996">Your OneSignal SDK integration is complete!</h3>'
+    + '<p style="margin:0 0 20px;font-size:0.9rem;color:#555;line-height:1.5">You can now send Push Notifications &amp; In-App Messages through OneSignal. Tap below to enable push notifications.</p>'
+    + '<button id="_osGotIt" style="background:#095996;color:white;border:none;border-radius:10px;padding:12px 32px;font-size:1rem;font-weight:600;cursor:pointer;width:100%">Got it</button>'
+    + '</div>';
+  document.body.appendChild(overlay);
+  document.getElementById('_osGotIt').onclick = function(){
+    overlay.remove();
+    // Request push permission on button tap (per the verification dialog spec)
+    OneSignalManager.requestPermission().then(function(accepted){
+      if(accepted && window.showToast) showToast('Push notifications enabled ✅','success');
+    });
+  };
+};
+
+// Initialize OneSignal immediately — before the Firebase SDK loads
+OneSignalManager.initialize();
+
+// Forward notification-click navigation messages from the SW
+if('serviceWorker' in navigator){
   navigator.serviceWorker.addEventListener('message', function(event){
     if(event.data && event.data.type === 'NAVIGATE' && window.navigateTo){
       navigateTo(event.data.page);
@@ -43,6 +165,7 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css" crossorigin="anonymous">
   <style>
   @font-face{font-family:"Font Awesome 6 Free";font-weight:900;font-display:swap;
@@ -2928,13 +3051,10 @@ async function doLogin(){
       setTimeout(function(){populateAssClassGroup();},500);
       setTimeout(function(){
         if(typeof initNotifications==='function')initNotifications();
-        if(Notification&&Notification.permission==='default'){
-          setTimeout(function(){
-            if(confirm('Enable push notifications to stay updated on assignments, results and messages?')){
-              requestNotifPermission();
-            }
-          },3000);
-        }
+        // Link this device to the logged-in user in OneSignal
+        OneSignalManager.login(user.id);
+        OneSignalManager.setTag('role', user.role || 'Student');
+        OneSignalManager.setTag('classGroup', user.classGroup || '');
       },1000);
       refreshCurrentPage();
     }).catch(function(e){
@@ -2943,7 +3063,7 @@ async function doLogin(){
     });
   }
 }
-function doLogout(){addAudit("LOGOUT",(DB.currentUser?DB.currentUser.role:"User")+" "+(DB.currentUser?DB.currentUser.name:"unknown")+" logged out");DB.currentUser=null;localStorage.setItem(DB_KEY,JSON.stringify(DB));$("mainApp").classList.add("hidden");$("authScreen").classList.remove("hidden");backToRoleSelector();clearTimeout(window._sessionTimer);document.removeEventListener("click",resetSessionTimer);document.removeEventListener("keydown",resetSessionTimer);showToast(t("loggedOut"),"success")}
+function doLogout(){addAudit("LOGOUT",(DB.currentUser?DB.currentUser.role:"User")+" "+(DB.currentUser?DB.currentUser.name:"unknown")+" logged out");OneSignalManager.logout();DB.currentUser=null;localStorage.setItem(DB_KEY,JSON.stringify(DB));$("mainApp").classList.add("hidden");$("authScreen").classList.remove("hidden");backToRoleSelector();clearTimeout(window._sessionTimer);document.removeEventListener("click",resetSessionTimer);document.removeEventListener("keydown",resetSessionTimer);showToast(t("loggedOut"),"success")}
 
 // ── Shared notification targeting/read helpers ─────────────────────
 // Tolerant of every notification shape this app has ever written
@@ -3543,69 +3663,45 @@ function safePrint(html, title){
 // Messaging → Web Push certificates → "Generate key pair". The placeholder
 // below will NOT deliver push — replace it before going live (see
 // PUSH_NOTIFICATIONS_SETUP.md).
-var FCM_VAPID_KEY = 'REPLACE_WITH_YOUR_VAPID_KEY';
+// ── OneSignal push permission ─────────────────────────────────────
+// All OneSignal SDK calls go through OneSignalManager (centralized wrapper).
+var ONESIGNAL_APP_ID = 'fd7b6da3-dc80-473d-9c4c-99433c028205'; // kept for Vercel /api/push reference
 
 // Notification categories with default enabled state
 var NOTIF_CATEGORIES = {
-  assignments:    {label:'New Assignments',     icon:'📝', default:true},
-  assignmentReminder: {label:'Assessment Reminders', icon:'⏰', default:true},
-  results:        {label:'Results & Grades',    icon:'🏆', default:true},
-  messages:       {label:'Messages',            icon:'💬', default:true},
-  announcements:  {label:'Announcements',       icon:'📢', default:true},
-  events:         {label:'Events',              icon:'📅', default:true},
-  certificates:   {label:'Certificates',        icon:'🎓', default:true},
-  attendance:     {label:'Attendance Updates',  icon:'✅', default:true},
+  assignments:        {label:'New Assignments',              icon:'📝', default:true},
+  assignmentReminder: {label:'Assessment Reminders',         icon:'⏰', default:true},
+  results:            {label:'Results & Grades',             icon:'🏆', default:true},
+  messages:           {label:'Messages',                     icon:'💬', default:true},
+  announcements:      {label:'Announcements',                icon:'📢', default:true},
+  events:             {label:'Events',                       icon:'📅', default:true},
+  certificates:       {label:'Certificates',                 icon:'🎓', default:true},
+  attendance:         {label:'Attendance Updates',           icon:'✅', default:true},
   attendanceReminder: {label:'Attendance Reminders (Teachers)', icon:'📅', default:true},
-  onlineClasses:  {label:'Online Classes',      icon:'🎥', default:true},
+  onlineClasses:      {label:'Online Classes',               icon:'🎥', default:true},
 };
 
-// ── Request notification permission + get FCM token ───────────────
+// ── Request notification permission via OneSignal ─────────────────
 async function requestNotifPermission(){
   if(!('Notification' in window)){
     showToast('Notifications not supported on this browser','warning');
     return false;
   }
-  try{
-    var perm = await Notification.requestPermission();
-    if(perm !== 'granted'){
-      showToast('Notification permission denied','warning');
-      return false;
-    }
-    await getFCMToken();
+  var accepted = await OneSignalManager.requestPermission();
+  if(accepted){
     showToast('Push notifications enabled ✅','success');
-    return true;
-  }catch(e){
-    console.warn('Notification permission error:',e);
-    return false;
+  } else {
+    showToast('Notification permission denied','warning');
   }
+  return accepted;
 }
 
-// ── Get FCM token and save to user's Firebase doc ─────────────────
-async function getFCMToken(){
-  if(!window._fcmMessaging||!window._swRegistration)return;
-  try{
-    var token = await window.getTokenFCM(window._fcmMessaging, {
-      vapidKey: FCM_VAPID_KEY,
-      serviceWorkerRegistration: window._swRegistration
-    });
-    if(token && DB.currentUser){
-      var user = DB.currentUser;
-      if(!user.fcmTokens)user.fcmTokens=[];
-      if(!user.fcmTokens.includes(token)){
-        user.fcmTokens.push(token);
-        // Keep max 5 tokens per user
-        if(user.fcmTokens.length>5)user.fcmTokens=user.fcmTokens.slice(-5);
-        var userRec = DB.users.find(function(u){return u.id===user.id;});
-        if(userRec){
-          userRec.fcmTokens = user.fcmTokens;
-          await fbSaveRecord('users', userRec, null, null);
-        }
-      }
-      console.log('FCM token saved ✅');
-    }
-  }catch(e){
-    console.warn('FCM token error:',e);
-  }
+// ── Save OneSignal Player ID to user's Firestore doc ─────────────
+// Now handled internally by OneSignalManager._savePlayerId()
+// This stub remains for any legacy call sites.
+async function saveOneSignalId(){
+  var id = OneSignalManager.getPlayerId();
+  if(id) OneSignalManager.login(DB.currentUser && DB.currentUser.id);
 }
 
 // ── Check notification preferences ────────────────────────────────
@@ -3632,24 +3728,32 @@ function saveNotifPrefs(){
 }
 
 // ── Show local notification (when app is open) ────────────────────
-function showLocalNotif(title, body, category, page){
+// Track which notification IDs have already been shown this session
+// so they never pop up again after being dismissed, even if the
+// Firestore onSnapshot re-fires (e.g. on reconnect or tab focus).
+var _shownNotifIds = new Set();
+
+function showLocalNotif(title, body, category, page, notifId){
   // In-app toast
   showToast('🔔 '+title+': '+body, 'info');
+  // Update app badge count
+  var unread = myNotifications().filter(function(n){return !notifIsRead(n,DB.currentUser);}).length;
+  if('setAppBadge' in navigator) navigator.setAppBadge(unread).catch(function(){});
   // Browser Notification API (shows even when tab is in background)
   if(Notification && Notification.permission === 'granted'){
     try{
       var n = new Notification(title, {
         body: body,
         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="32" fill="%23095996"/><text x="96" y="130" font-family="Arial" font-size="72" font-weight="bold" fill="white" text-anchor="middle">JDC</text></svg>',
-        tag: category,
-        requireInteraction: false
+        tag: (notifId||category), // unique tag per notification so they stack rather than replace
+        requireInteraction: true   // stays visible until user explicitly dismisses it
       });
       n.onclick = function(){
         window.focus();
         if(window.navigateTo)navigateTo(page||'dashboard');
         n.close();
       };
-      setTimeout(function(){n.close();}, 6000);
+      // No auto-close — requireInteraction keeps it until dismissed
     }catch(e){console.warn('Notification show error:',e);}
   }
 }
@@ -3670,10 +3774,42 @@ async function pushNotification(title, body, category, page, targetUserIds){
     sentBy: DB.currentUser ? DB.currentUser.id : '',
     targetUsers: targetUserIds||'all'
   };
-  // Save to Firestore — onSnapshot will trigger for ALL connected users
+  // Save to Firestore — onSnapshot will show in-app alert for all open tabs
   await fbSaveRecord('notifications', notif, null, null);
-  // Also show locally for sender
-  showLocalNotif(title, body, category, page);
+  // Show locally for sender
+  showLocalNotif(title, body, category, page, notif.id);
+
+  // Resolve target users and collect their OneSignal player IDs
+  var targetUsers = [];
+  var senderId = DB.currentUser ? DB.currentUser.id : '';
+  if(!targetUserIds || targetUserIds === 'all'){
+    targetUsers = DB.users.filter(function(u){return u.id !== senderId;});
+  } else if(targetUserIds === 'students'){
+    targetUsers = DB.users.filter(function(u){return u.role==='Student' && u.id!==senderId;});
+  } else if(targetUserIds === 'teachers'){
+    targetUsers = DB.users.filter(function(u){return u.role==='Teacher' && u.id!==senderId;});
+  } else if(Array.isArray(targetUserIds)){
+    targetUsers = DB.users.filter(function(u){return targetUserIds.includes(u.id) && u.id!==senderId;});
+  }
+
+  // Collect OneSignal player IDs, respecting per-user category preference
+  var playerIds = [];
+  targetUsers.forEach(function(u){
+    var prefs = u.notifPrefs || {};
+    if(prefs[category||'announcements'] === false) return;
+    (u.oneSignalIds || []).forEach(function(pid){ playerIds.push(pid); });
+  });
+
+  if(playerIds.length){
+    // Deliver background push via Vercel serverless function (free, no billing needed)
+    fetch('/api/push', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({title:title, body:body, page:page||'dashboard', playerIds:playerIds})
+    }).then(function(r){return r.json();}).then(function(d){
+      console.log('Push delivered to', d.sent, 'device(s)');
+    }).catch(function(e){console.warn('Push delivery error:',e);});
+  }
   return notif;
 }
 
@@ -3682,10 +3818,13 @@ function handleIncomingNotif(notif){
   if(!DB.currentUser)return;
   if(!notifIsForUser(notif, DB.currentUser))return;
   if(notifIsRead(notif, DB.currentUser))return;
+  // Dedup: never show the same notification twice in one session
+  if(_shownNotifIds.has(notif.id))return;
+  _shownNotifIds.add(notif.id);
   // Check category preference
   if(!notifEnabled(notif.category||'announcements'))return;
-  // Show it
-  showLocalNotif(notif.title||'JDC-LMS', notif.body||notif.message||'', notif.category, notif.page);
+  // Show it — pass the notifId so each notification gets a unique tag
+  showLocalNotif(notif.title||'JDC-LMS', notif.body||notif.message||'', notif.category, notif.page, notif.id);
   updateNotifBadge();
 }
 
@@ -3703,16 +3842,24 @@ window.handleFCMMessage = function(payload){
 
 // ── Mark notification as read ─────────────────────────────────────
 function markNotifRead(notifId){
+  // Prevent this notification from ever re-appearing in this session
+  _shownNotifIds.add(notifId);
   var notif = DB.notifications.find(function(n){return n.id===notifId;});
   if(!notif)return;
   if(!notif.readBy)notif.readBy=[];
   var uid = DB.currentUser&&DB.currentUser.id;
   if(uid&&!notif.readBy.includes(uid)){
     notif.readBy.push(uid);
+    notif.read = true;
     fbSaveRecord('notifications', notif, null, null);
   }
-  notif.read = true;
   updateNotifBadge();
+  // Update app icon badge count
+  var unread = myNotifications().filter(function(n){return !notifIsRead(n,DB.currentUser);}).length;
+  if('setAppBadge' in navigator){
+    if(unread>0) navigator.setAppBadge(unread).catch(function(){});
+    else navigator.clearAppBadge().catch(function(){});
+  }
 }
 
 // ── Auto-trigger push for key actions ────────────────────────────
@@ -3778,15 +3925,9 @@ function renderNotifPrefsPage(){
 
 // ── Init: request permission after login, set up SW message listener ──
 function initNotifications(){
-  // Re-import getToken for FCM
-  if(window._fcmReady && window._fcmMessaging){
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js').then(function(m){
-      window.getTokenFCM = m.getToken;
-      // Auto-request if previously granted
-      if(Notification && Notification.permission === 'granted'){
-        getFCMToken();
-      }
-    }).catch(function(e){console.warn('FCM import error:',e);});
+  if(Notification && Notification.permission === 'granted'){
+    var id = OneSignalManager.getPlayerId();
+    if(id) OneSignalManager.login(DB.currentUser && DB.currentUser.id);
   }
 }
 
@@ -5595,9 +5736,46 @@ function openMyProfile(){var user=DB.currentUser;if(!user)return;var modal=$('pr
 function saveMyProfile(){var user=DB.currentUser;if(!user)return;var nameEl=$('profileEditName'),mobileEl=$('profileEditMobile'),emailEl=$('profileEditEmail'),natEl=$('profileEditNationality'),groupEl=$('profileEditClassGroup'),genderEl=$('profileEditGender'),classIdEl=$('profileEditClassID');if(!nameEl||!mobileEl){showToast('Profile form is not available','error');return}var name=nameEl.value.trim();var mobile=mobileEl.value.trim();if(!name||!mobile){showToast('Name and mobile are required','error');return}var exists=DB.users.find(function(u){return u.id!==user.id&&u.mobile===mobile});if(exists){showToast('This mobile number is already in use','error');return}user.name=name;user.mobile=mobile;if(emailEl)user.email=emailEl.value.trim();if(natEl)user.nationality=natEl.value;if(groupEl)user.classGroup=groupEl.value;if(genderEl)user.gender=genderEl.value;if(classIdEl)user.classID=classIdEl.value.trim();DB.currentUser=user;saveDBLocalOnly();addAudit('PROFILE_UPDATE',user.role+' '+user.name+' updated their profile');fbSaveRecord('users',user,'Profile updated ✅',null);var modal=$('profileEditModal');if(modal)closeModal('profileEditModal');else closeModal('profileModal');if(typeof renderDashboard==='function')renderDashboard()}
 function showProfile(){var user=DB.currentUser;if(!user)return;var html='';html+='<div style="text-align:center;margin-bottom:20px"><div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-light));color:white;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;margin:0 auto 12px">'+user.name.charAt(0)+'</div><h3 style="font-size:1.1rem">'+esc(user.name)+'</h3><p style="font-size:0.8rem;color:var(--text-light)">'+user.role+'</p></div>';html+='<div class="form-group"><label class="form-label" data-i18n="fullName"></label><input type="text" class="form-input" id="profileName" value="'+esc(user.name)+'"></div>';html+='<div class="form-group"><label class="form-label" data-i18n="mobileNumber"></label><input type="tel" class="form-input" id="profileMobile" value="'+user.mobile+'"></div>';html+='<div class="form-group"><label class="form-label" data-i18n="email"></label><input type="email" class="form-input" id="profileEmail" value="'+(user.email||'')+'"></div>';if(user.role==='Student'){html+='<div class="form-group"><label class="form-label" data-i18n="classGroup"></label><input type="text" class="form-input" value="'+user.classGroup+'" readonly></div>';if(user.classID){html+='<div class="form-group"><label class="form-label" data-i18n="classID"></label><input type="text" class="form-input" value="'+esc(user.classID)+'" readonly style="font-family:monospace;color:var(--primary);font-weight:600"></div>'}html+='<div class="form-group"><label class="form-label" data-i18n="nationality"></label><input type="text" class="form-input" value="'+(user.nationality||'')+'" readonly></div>';html+='<div class="form-group"><label class="form-label" data-i18n="teacher"></label><input type="text" class="form-input" value="'+getTeacherName(user.teacher)+'" readonly></div>'}html+='<div class="form-group"><label class="form-label" data-i18n="newPassword"></label><input type="password" class="form-input" id="profileNewPassword" placeholder="Leave blank to keep current"></div>';if(user.role==='Admin'){html+='<div style="margin-top:16px;text-align:center"><button class="btn btn-outline btn-sm" onclick="closeModal(\'profileModal\');showSettings()"><i class="fas fa-cog"></i> <span data-i18n="settings"></span></button></div>'}$('profileBody').innerHTML=html;openModal('profileModal');applyTranslations()}
 function saveProfile(){var user=DB.currentUser;if(!user)return;user.name=$('profileName').value.trim();user.mobile=$('profileMobile').value.trim();user.email=$('profileEmail').value.trim();var np=$('profileNewPassword').value;if(np){if(np.length<6){showToast(t('passwordMin6'),'error');return}user.password=np}saveDB();showToast(t('updated'),'success');closeModal('profileModal');renderDashboard()}
-function showNotifications(){var user=DB.currentUser;var mine=myNotifications().slice().reverse();var html='<div style="text-align:right;margin-bottom:8px"><button class="btn btn-outline btn-sm" onclick="closeModal(\'notificationsPanel\');navigateTo(\'notifPrefs\')"><i class="fas fa-sliders-h"></i> Notification Settings</button></div>';if(mine.length===0)html+=emptyState('noNotifications');else{mine.forEach(function(n){var navTarget=n.page||getNotifTarget(n.title);var read=notifIsRead(n,user);html+='<div class="list-item" style="border-bottom:1px solid var(--border);cursor:pointer" onclick="handleNotifClick(\''+n.id+'\',\''+navTarget+'\')">';html+='<div class="list-avatar" style="background:'+(read?'var(--text-light)':'var(--accent)')+'"><i class="fas fa-bell"></i></div>';html+='<div class="list-content"><div class="list-title">'+esc(n.title)+'</div><div class="list-subtitle">'+esc(n.body||n.message||'')+'</div></div>';html+='<div class="list-meta">'+formatDate(n.date)+'</div></div>'})}$('notificationsBody').innerHTML=html;openModal('notificationsPanel');updateNotifBadge()}
+function showNotifications(){var user=DB.currentUser;var mine=myNotifications().slice().reverse();
+var html='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+html+='<button class="btn btn-outline btn-sm" onclick="closeModal(\'notificationsPanel\');navigateTo(\'notifPrefs\')"><i class="fas fa-sliders-h"></i> Notification Settings</button>';
+var clearLabel=user&&user.role==='Admin'?'<i class="fas fa-trash"></i> Delete All (Everyone)':'<i class="fas fa-check-double"></i> Mark All Read';
+if((DB.notifications||[]).length>0) html+='<button class="btn btn-sm" style="background:var(--danger);color:white" onclick="clearAllMyNotifications()">'+clearLabel+'</button>';
+html+='</div>';
+if(mine.length===0)html+=emptyState('noNotifications');
+else{mine.forEach(function(n){var navTarget=n.page||getNotifTarget(n.title);var read=notifIsRead(n,user);html+='<div class="list-item" style="border-bottom:1px solid var(--border);cursor:pointer" onclick="handleNotifClick(\''+n.id+'\',\''+navTarget+'\')">';html+='<div class="list-avatar" style="background:'+(read?'var(--text-light)':'var(--accent)')+'"><i class="fas fa-bell"></i></div>';html+='<div class="list-content"><div class="list-title">'+esc(n.title)+'</div><div class="list-subtitle">'+esc(n.body||n.message||'')+'</div></div>';html+='<div class="list-meta">'+formatDate(n.date)+'</div></div>'});}
+$('notificationsBody').innerHTML=html;openModal('notificationsPanel');updateNotifBadge()}
 function getNotifTarget(title){var t=title.toLowerCase();if(t.indexOf('assignment')>=0)return 'assignments';if(t.indexOf('event')>=0)return 'events';if(t.indexOf('class')>=0||t.indexOf('schedule')>=0)return 'onlineClasses';if(t.indexOf('message')>=0)return 'messages';if(t.indexOf('result')>=0||t.indexOf('grade')>=0)return 'results';if(t.indexOf('certificate')>=0)return 'showMyCertificates';return 'dashboard'}
 function handleNotifClick(notifId,target){markNotifRead(notifId);closeModal('notificationsPanel');if(target==='showMyCertificates')showMyCertificates();else navigateTo(target)}
+async function clearAllMyNotifications(){
+  var user=DB.currentUser;if(!user)return;
+  var mine=myNotifications();
+  if(user.role==='Admin'){
+    // Admin: hard-delete every notification from Firestore — gone for everyone
+    var all=DB.notifications||[];
+    showToast('Deleting all notifications...','info');
+    for(var i=0;i<all.length;i++){
+      _shownNotifIds.add(all[i].id);
+      await fbDelete('notifications',all[i].id);
+    }
+    DB.notifications=[];
+  } else {
+    // Regular user: mark all as read for themselves only
+    mine.forEach(function(n){
+      _shownNotifIds.add(n.id);
+      if(!n.readBy)n.readBy=[];
+      if(!n.readBy.includes(user.id)){
+        n.readBy.push(user.id);
+        n.read=true;
+        fbSaveRecord('notifications',n,null,null);
+      }
+    });
+  }
+  updateNotifBadge();
+  if('clearAppBadge' in navigator) navigator.clearAppBadge().catch(function(){});
+  closeModal('notificationsPanel');
+  showToast('All notifications cleared','success');
+}
 function showAdminStudents(){var html='<div class="section-header"><h3 data-i18n="allStudents"></h3><button class="btn btn-primary btn-sm" onclick="openStudentModal()"><i class="fas fa-plus"></i> Add</button></div>';html+='<div class="search-bar"><i class="fas fa-search"></i><input type="text" placeholder="'+t('search')+'" onkeyup="searchStudents(this.value)"></div>';html+='<div id="studentSearchResults">';var students=DB.users.filter(function(u){return u.role==='Student'});html+=renderStudentList(students);html+='</div>';$("mainContent").innerHTML=html;applyTranslations()}
 function showAdminTeachers(){openTeacherMgmt()}
 function renderTeacherList(teachers){var html='<div class="card">';if(teachers.length===0)html+=emptyState('noUsers');else teachers.forEach(function(t){html+=renderUserRow(t,true)});html+='</div>';return html}
@@ -5755,7 +5933,46 @@ function exportData(category){var data=[],filename='';if(category==='students'){
 function downloadFullBackup(){var backup={exportedAt:new Date().toISOString(),version:'2.0',data:DB};var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='jdc_portal_backup_'+new Date().toISOString().slice(0,10)+'.json';link.click();showToast(t('backupDownloaded'),'success');addAudit('BACKUP','Downloaded full backup')}
 var currentDeleteCategory=null;
 function confirmBulkDelete(category){currentDeleteCategory=category;var count=0;if(category==='students')count=DB.users.filter(function(u){return u.role==='Student'}).length;else if(category==='teachers')count=DB.users.filter(function(u){return u.role==='Teacher'}).length;else if(category==='assignments')count=DB.assignments.length;else if(category==='submissions')count=DB.submissions.length;else if(category==='results')count=DB.results.length;else if(category==='events')count=DB.events.length;else if(category==='certificates')count=DB.certificates.length;else if(category==='onlineClasses')count=DB.onlineClasses.length;else if(category==='messages')count=DB.messages.length;else if(category==='notifications')count=DB.notifications.length;else if(category==='eventRegistrations')count=DB.eventRegistrations.length;else if(category==='feedback')count=(DB.feedback||[]).length;$('bulkDeleteText').innerHTML=t('confirmDelete')+': <strong>'+category+'</strong> ('+count+' '+t('items')+')';$('bulkDeleteConfirm').value='';$('bulkDeleteBtn').onclick=function(){if($('bulkDeleteConfirm').value.trim()==='DELETE'){doBulkDelete(category)}else{showToast(t('typeDeleteConfirm'),'error')}};openModal('bulkDeleteModal')}
-function doBulkDelete(category){if(category==='students')DB.users=DB.users.filter(function(u){return u.role!=='Student'});else if(category==='teachers')DB.users=DB.users.filter(function(u){return u.role!=='Teacher'});else if(category==='assignments')DB.assignments=[];else if(category==='submissions')DB.submissions=[];else if(category==='results')DB.results=[];else if(category==='events'){DB.events=[];DB.eventRegistrations=[]}else if(category==='certificates')DB.certificates=[];else if(category==='onlineClasses')DB.onlineClasses=[];else if(category==='messages')DB.messages=[];else if(category==='notifications')DB.notifications=[];else if(category==='eventRegistrations')DB.eventRegistrations=[];else if(category==='feedback')DB.feedback=[];saveDB();closeModal('bulkDeleteModal');showToast(t('deleted')+': '+category,'success');addAudit('BULK_DELETE','Deleted all '+category)}
+async function doBulkDelete(category){
+  // Map category to the local DB array and Firestore collection name
+  var collectionMap={
+    students:'users',teachers:'users',assignments:'assignments',
+    submissions:'submissions',results:'results',events:'events',
+    certificates:'certificates',onlineClasses:'onlineClasses',
+    messages:'messages',notifications:'notifications',
+    eventRegistrations:'eventRegistrations',feedback:'feedback'
+  };
+  var col = collectionMap[category] || category;
+
+  // Get the IDs to delete from Firestore BEFORE clearing local state
+  var ids = [];
+  if(category==='students') ids=DB.users.filter(function(u){return u.role==='Student';}).map(function(u){return u.id;});
+  else if(category==='teachers') ids=DB.users.filter(function(u){return u.role==='Teacher';}).map(function(u){return u.id;});
+  else if(DB[col]) ids=(DB[col]||[]).map(function(r){return r.id;}).filter(Boolean);
+
+  // Clear local state immediately so the UI updates right away
+  if(category==='students') DB.users=DB.users.filter(function(u){return u.role!=='Student';});
+  else if(category==='teachers') DB.users=DB.users.filter(function(u){return u.role!=='Teacher';});
+  else if(category==='events'){DB.events=[];DB.eventRegistrations=[];}
+  else if(DB[col]) DB[col]=[];
+  saveDB();
+  closeModal('bulkDeleteModal');
+  showToast('Deleting '+ids.length+' '+category+'...','info');
+  addAudit('BULK_DELETE','Deleting all '+category+' ('+ids.length+' items)');
+
+  // Delete every document from Firestore so onSnapshot doesn't bring them back
+  var deleted=0;
+  for(var i=0;i<ids.length;i++){
+    var ok = await fbDelete(col, ids[i]);
+    if(ok) deleted++;
+  }
+  // Also delete eventRegistrations when deleting events
+  if(category==='events'){
+    var regIds=(DB.eventRegistrations||[]).map(function(r){return r.id;}).filter(Boolean);
+    for(var j=0;j<regIds.length;j++) await fbDelete('eventRegistrations', regIds[j]);
+  }
+  showToast(t('deleted')+': '+deleted+' '+category,'success');
+}
 
 // ===================== SEND NOTIFICATION =====================
 function openSendNotification(){$('notifTitle').value='';$('notifMessage').value='';$('notifViaEmail').checked=true;$('notifViaWhatsApp').checked=true;$('notifRecipients').value='all';$('notifIndividualWrap').style.display='none';var sel=$('notifIndividual');sel.innerHTML='';DB.users.forEach(function(u){if(u.id!=='admin'){var opt=document.createElement('option');opt.value=u.id;opt.textContent=u.name+' ('+u.role+')';sel.appendChild(opt)}});$('sendNotifModal').classList.remove('hidden');openModal('sendNotifModal')}
