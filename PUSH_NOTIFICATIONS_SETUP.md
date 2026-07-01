@@ -1,11 +1,17 @@
 # JDC-LMS — Background Push Notification Setup
 
 This adds real background push (notifications that arrive even when the app
-is fully closed) on top of the in-app system that already existed. Five
+is fully closed) on top of the in-app system that already existed. Seven
 trigger types are wired up: new assignment, weekly assessment reminder,
-admin announcement, certificate approved, and new message received. Every
-user can turn each category on/off independently from the bell icon →
-**Notification Settings**.
+admin announcement, certificate approved, new message received, new online
+class scheduled, and a daily reminder nudging teachers who haven't marked
+attendance yet. Every user can turn each category on/off independently
+from the bell icon → **Notification Settings**.
+
+("New course notifications" maps onto the app's existing Online Classes
+feature, and "Ticket reply notifications" maps onto the existing Messages
+feature — there's no separate ticketing system in this app, so these reuse
+what's already there rather than adding new, parallel features.)
 
 ## What changed
 
@@ -63,15 +69,18 @@ cd jdc-lms          # the folder containing firebase.json
 firebase deploy --only functions
 ```
 
-This deploys `deliverNotificationPush` (instant delivery) and
-`weeklyAssessmentReminder` (scheduled). `.firebaserc` already points at
-your `student-portal-2b672` project, so you shouldn't need `firebase use`.
+This deploys `deliverNotificationPush` (instant delivery), plus two
+scheduled functions: `weeklyAssessmentReminder` and
+`attendanceMarkingReminder`. `.firebaserc` already points at your
+`student-portal-2b672` project, so you shouldn't need `firebase use`.
 
-If you'd rather adjust the reminder schedule first, edit the `schedule` /
+If you'd rather adjust either schedule first, edit the `schedule` /
 `timeZone` values near the bottom of `functions/index.js` before deploying
-— it currently runs every Monday at 08:00 Asia/Riyadh and reminds students
-about assignments closing within the next 7 days that they haven't
-submitted.
+— `weeklyAssessmentReminder` currently runs every Monday at 08:00
+Asia/Riyadh and reminds students about assignments closing within the next
+7 days that they haven't submitted; `attendanceMarkingReminder` runs daily
+at 19:00 Asia/Riyadh and nudges any teacher who hasn't marked attendance
+that day for their students.
 
 ### 4. Deploy the static files
 
