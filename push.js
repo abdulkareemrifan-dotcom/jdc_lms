@@ -1,18 +1,18 @@
 // JDC-LMS — Vercel Serverless Function for OneSignal push delivery
+// Uses Node's built-in https module (no fetch required, works on all Node versions)
 
-module.exports = async function handler(req, res) {
+const https = require('https');
+
+module.exports = function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return; }
 
   const appId = process.env.ONESIGNAL_APP_ID;
   const apiKey = process.env.ONESIGNAL_REST_API_KEY;
-  if (!appId || !apiKey) {
-    console.error('Missing OneSignal env vars');
-    return res.status(500).json({ error: 'Server not configured' });
-  }
+  if (!appId || !apiKey) { res.status(500).json({ error: 'Missing env vars' }); return; }
 
   const body = req.body || {};
   const title = body.title || 'JDC-LMS';
@@ -29,29 +29,47 @@ module.exports = async function handler(req, res) {
     audience = { included_segments: ['Total Subscriptions'] };
   }
 
-  try {
-    const response = await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + apiKey,
-      },
-      body: JSON.stringify({
-        app_id: appId,
-        ...audience,
-        headings: { en: title },
-        contents: { en: message },
-        url: 'https://jdc-lms-eight.vercel.app/',
-        ttl: 259200,
-      }),
-    });
+  const isNewKey = apiKey.indexOf('os_v2_') === 0;
+  const payload = JSON.stringify(Object.assign({
+    app_id: appId,
+    headings: { en: title },
+    contents: { en: message },
+    url: 'https://jdc-lms-eight.vercel.app/',
+    ttl: 259200
+  }, audience));
 
-    const data = await response.json();
-    console.log('OneSignal response:', JSON.stringify(data));
-    if (data.errors) return res.status(500).json({ error: data.errors });
-    return res.status(200).json({ sent: data.recipients || 0, id: data.id });
-  } catch (err) {
-    console.error('Push error:', err.message);
-    return res.status(500).json({ error: err.message });
-  }
+  const options = {
+    hostname: 'onesignal.com',
+    path: '/api/v1/notifications',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': (isNewKey ? 'Key ' : 'Basic ') + apiKey,
+      'Content-Length': Buffer.byteLength(payload)
+    }
+  };
+
+  const request = https.request(options, function(r) {
+    let data = '';
+    r.on('data', function(chunk) { data += chunk; });
+    r.on('end', function() {
+      try {
+        const parsed = JSON.parse(data);
+        console.log('OneSignal response:', JSON.stringify(parsed));
+        if (parsed.errors) res.status(400).json({ error: parsed.errors });
+        else res.status(200).json({ sent: parsed.recipients || 0, id: parsed.id });
+      } catch(e) {
+        console.error('Parse error:', data);
+        res.status(500).json({ error: data.slice(0, 200) });
+      }
+    });
+  });
+
+  request.on('error', function(e) {
+    console.error('Request error:', e.message);
+    res.status(500).json({ error: e.message });
+  });
+
+  request.write(payload);
+  request.end();
 };

@@ -3795,49 +3795,25 @@ async function pushNotification(title, body, category, page, targetUserIds){
     targetUsers = DB.users.filter(function(u){return targetUserIds.includes(u.id) && u.id!==senderId;});
   }
 
-  // Deliver background push directly via OneSignal REST API
-  if(ONESIGNAL_REST_KEY && ONESIGNAL_REST_KEY !== 'PASTE_YOUR_REST_API_KEY_HERE'){
-    var audience;
-    if(!targetUserIds || targetUserIds === 'all'){
-      audience = { included_segments: ['Total Subscriptions'] };
-    } else if(targetUserIds === 'students'){
-      audience = { filters: [{ field:'tag', key:'role', relation:'=', value:'Student' }] };
-    } else if(targetUserIds === 'teachers'){
-      audience = { filters: [{ field:'tag', key:'role', relation:'=', value:'Teacher' }] };
-    } else if(Array.isArray(targetUserIds) && targetUserIds.length){
-      audience = { include_external_user_ids: targetUserIds, channel_for_external_user_ids: 'push' };
-    } else {
-      audience = { included_segments: ['Total Subscriptions'] };
-    }
-    // os_v2_app_ keys use 'Key' auth; legacy keys use 'Basic'
-    // Always use v1 endpoint — it supports CORS from browsers
-    var isNewKey = ONESIGNAL_REST_KEY.indexOf('os_v2_') === 0;
-    var authHeader = isNewKey
-      ? 'Key ' + ONESIGNAL_REST_KEY
-      : 'Basic ' + ONESIGNAL_REST_KEY;
-    fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader
-      },
-      body: JSON.stringify(Object.assign({
-        app_id: ONESIGNAL_APP_ID,
-        headings: { en: title },
-        contents: { en: body || '' },
-        url: window.location.origin,
-        ttl: 259200
-      }, audience))
-    }).then(function(r){
-      return r.text().then(function(t){
-        console.log('OneSignal HTTP status:', r.status, 'response:', t.slice(0,300));
-        try{ var d=JSON.parse(t);
-          if(d.errors) console.warn('OneSignal errors:', JSON.stringify(d.errors));
-          else console.log('OneSignal push sent to', d.recipients, 'recipients ✅');
-        }catch(e){ console.warn('OneSignal non-JSON:', t.slice(0,200)); }
-      });
-    }).catch(function(e){ console.warn('OneSignal push error:', e); });
+  // Deliver background push via Vercel /api/push (same-origin, no CORS issues)
+  var pushPayload = { title: title, body: body };
+  if(!targetUserIds || targetUserIds === 'all'){
+    pushPayload.targetAll = true;
+  } else if(targetUserIds === 'students'){
+    pushPayload.targetRole = 'Student';
+  } else if(targetUserIds === 'teachers'){
+    pushPayload.targetRole = 'Teacher';
+  } else if(Array.isArray(targetUserIds) && targetUserIds.length){
+    pushPayload.externalIds = targetUserIds;
   }
+  fetch('/api/push', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(pushPayload)
+  }).then(function(r){ return r.json(); }).then(function(d){
+    if(d.error) console.warn('Push error:', d.error);
+    else console.log('Push sent to', d.sent, 'recipients ✅');
+  }).catch(function(e){ console.warn('Push fetch error:', e); });
   return notif;
 }
 
