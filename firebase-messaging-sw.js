@@ -52,10 +52,9 @@ messaging.onBackgroundMessage(function (payload) {
     body: body,
     icon: JDC_ICON,
     badge: JDC_ICON,
-    tag: data.category || 'jdc-lms',
-    // Re-showing the same tag replaces rather than stacks duplicate alerts.
+    tag: data.notifId || data.category || 'jdc-lms',
     renotify: true,
-    requireInteraction: false,
+    requireInteraction: true,  // stays until user explicitly dismisses it
     data: {
       page: data.page || 'dashboard',
       notifId: data.notifId || ''
