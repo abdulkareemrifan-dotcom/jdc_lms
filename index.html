@@ -3793,40 +3793,39 @@ async function pushNotification(title, body, category, page, targetUserIds){
     targetUsers = DB.users.filter(function(u){return targetUserIds.includes(u.id) && u.id!==senderId;});
   }
 
-  // Resolve target user IDs (external IDs registered via OneSignalManager.login)
+  // Build OneSignal push payload
+  var pushPayload = { title: title, body: body, page: page || 'dashboard' };
   var senderId = DB.currentUser ? DB.currentUser.id : '';
-  var externalIds = [];
-  if(!targetUserIds || targetUserIds === 'all'){
-    DB.users.forEach(function(u){ if(u.id !== senderId) externalIds.push(u.id); });
-  } else if(targetUserIds === 'students'){
-    DB.users.forEach(function(u){ if(u.role==='Student' && u.id!==senderId) externalIds.push(u.id); });
-  } else if(targetUserIds === 'teachers'){
-    DB.users.forEach(function(u){ if(u.role==='Teacher' && u.id!==senderId) externalIds.push(u.id); });
-  } else if(Array.isArray(targetUserIds)){
-    externalIds = targetUserIds.filter(function(id){ return id !== senderId; });
-  } else if(typeof targetUserIds === 'string' && targetUserIds !== senderId){
-    externalIds = [targetUserIds];
+
+  if (!targetUserIds || targetUserIds === 'all') {
+    pushPayload.targetAll = true;
+  } else if (targetUserIds === 'students') {
+    pushPayload.targetRole = 'Student';
+  } else if (targetUserIds === 'teachers') {
+    pushPayload.targetRole = 'Teacher';
+  } else if (Array.isArray(targetUserIds)) {
+    // Filter out sender, respect per-user category preference
+    var ids = targetUserIds.filter(function(uid){
+      if(uid === senderId) return false;
+      var u = DB.users.find(function(x){ return x.id === uid; });
+      if(!u) return false;
+      var prefs = u.notifPrefs || {};
+      return prefs[category||'announcements'] !== false;
+    });
+    pushPayload.externalIds = ids;
+  } else {
+    pushPayload.targetAll = true;
   }
 
-  // Respect per-user category preference
-  externalIds = externalIds.filter(function(uid){
-    var u = DB.users.find(function(x){ return x.id===uid; });
-    if(!u) return false;
-    var prefs = u.notifPrefs || {};
-    return prefs[category||'announcements'] !== false;
-  });
+  // Deliver background push via Vercel /api/push → OneSignal
+  fetch('/api/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(pushPayload)
+  }).then(function(r){ return r.json(); }).then(function(d){
+    console.log('Push sent via OneSignal:', d);
+  }).catch(function(e){ console.warn('Push delivery error:', e); });
 
-  if(externalIds.length){
-    // Deliver background push via Vercel /api/push using OneSignal external user IDs
-    // — no player ID storage needed; OneSignal maps external IDs to devices automatically
-    fetch('/api/push', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({title:title, body:body, page:page||'dashboard', externalIds:externalIds})
-    }).then(function(r){ return r.json(); }).then(function(d){
-      console.log('Push delivered via OneSignal to', externalIds.length, 'user(s)', d);
-    }).catch(function(e){ console.warn('Push delivery error:',e); });
-  }
   return notif;
 }
 

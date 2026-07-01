@@ -1,23 +1,35 @@
 // JDC-LMS — Vercel Serverless Function for OneSignal push delivery
-// Uses external_user_ids (the user's LMS ID set via OneSignal.login())
-// so no player ID storage is needed — OneSignal maps them to devices.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { title, body, page, externalIds } = req.body || {};
+  const { title, body, page, externalIds, targetAll, targetRole } = req.body || {};
 
-  if (!title || !externalIds || !externalIds.length) {
-    return res.status(400).json({ error: 'Missing title or externalIds' });
-  }
+  if (!title) return res.status(400).json({ error: 'Missing title' });
 
   const appId = process.env.ONESIGNAL_APP_ID;
   const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+  if (!appId || !apiKey) return res.status(500).json({ error: 'OneSignal env vars not configured' });
 
-  if (!appId || !apiKey) {
-    return res.status(500).json({ error: 'OneSignal env vars not configured' });
+  // Build the audience targeting
+  let audience = {};
+
+  if (targetAll) {
+    // Send to all subscribers
+    audience = { included_segments: ['Total Subscriptions'] };
+  } else if (targetRole === 'Student' || targetRole === 'Teacher') {
+    // Send to subscribers tagged with this role
+    audience = {
+      filters: [{ field: 'tag', key: 'role', relation: '=', value: targetRole }]
+    };
+  } else if (externalIds && externalIds.length) {
+    // Send to specific users by their LMS user ID
+    audience = { include_aliases: { external_id: externalIds }, target_channel: 'push' };
+  } else {
+    // Fallback: send to all
+    audience = { included_segments: ['Total Subscriptions'] };
   }
 
   try {
@@ -29,14 +41,11 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         app_id: appId,
-        // Target by external user ID (set via OneSignal.login(userId) in the app)
-        // Works even when the app is fully closed — no player ID storage needed
-        include_external_user_ids: externalIds,
-        channel_for_external_user_ids: 'push',
+        ...audience,
         headings: { en: title },
         contents: { en: body || '' },
         url: 'https://jdc-lms-eight.vercel.app/',
-        ttl: 259200, // keep for 3 days if device is offline
+        ttl: 259200,
       }),
     });
 
