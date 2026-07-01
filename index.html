@@ -3651,24 +3651,32 @@ function saveNotifPrefs(){
 }
 
 // ── Show local notification (when app is open) ────────────────────
-function showLocalNotif(title, body, category, page){
+// Track which notification IDs have already been shown this session
+// so they never pop up again after being dismissed, even if the
+// Firestore onSnapshot re-fires (e.g. on reconnect or tab focus).
+var _shownNotifIds = new Set();
+
+function showLocalNotif(title, body, category, page, notifId){
   // In-app toast
   showToast('🔔 '+title+': '+body, 'info');
+  // Update app badge count
+  var unread = myNotifications().filter(function(n){return !notifIsRead(n,DB.currentUser);}).length;
+  if('setAppBadge' in navigator) navigator.setAppBadge(unread).catch(function(){});
   // Browser Notification API (shows even when tab is in background)
   if(Notification && Notification.permission === 'granted'){
     try{
       var n = new Notification(title, {
         body: body,
         icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="32" fill="%23095996"/><text x="96" y="130" font-family="Arial" font-size="72" font-weight="bold" fill="white" text-anchor="middle">JDC</text></svg>',
-        tag: category,
-        requireInteraction: false
+        tag: (notifId||category), // unique tag per notification so they stack rather than replace
+        requireInteraction: true   // stays visible until user explicitly dismisses it
       });
       n.onclick = function(){
         window.focus();
         if(window.navigateTo)navigateTo(page||'dashboard');
         n.close();
       };
-      setTimeout(function(){n.close();}, 6000);
+      // No auto-close — requireInteraction keeps it until dismissed
     }catch(e){console.warn('Notification show error:',e);}
   }
 }
@@ -3701,10 +3709,13 @@ function handleIncomingNotif(notif){
   if(!DB.currentUser)return;
   if(!notifIsForUser(notif, DB.currentUser))return;
   if(notifIsRead(notif, DB.currentUser))return;
+  // Dedup: never show the same notification twice in one session
+  if(_shownNotifIds.has(notif.id))return;
+  _shownNotifIds.add(notif.id);
   // Check category preference
   if(!notifEnabled(notif.category||'announcements'))return;
-  // Show it
-  showLocalNotif(notif.title||'JDC-LMS', notif.body||notif.message||'', notif.category, notif.page);
+  // Show it — pass the notifId so each notification gets a unique tag
+  showLocalNotif(notif.title||'JDC-LMS', notif.body||notif.message||'', notif.category, notif.page, notif.id);
   updateNotifBadge();
 }
 
@@ -3722,16 +3733,24 @@ window.handleFCMMessage = function(payload){
 
 // ── Mark notification as read ─────────────────────────────────────
 function markNotifRead(notifId){
+  // Prevent this notification from ever re-appearing in this session
+  _shownNotifIds.add(notifId);
   var notif = DB.notifications.find(function(n){return n.id===notifId;});
   if(!notif)return;
   if(!notif.readBy)notif.readBy=[];
   var uid = DB.currentUser&&DB.currentUser.id;
   if(uid&&!notif.readBy.includes(uid)){
     notif.readBy.push(uid);
+    notif.read = true;
     fbSaveRecord('notifications', notif, null, null);
   }
-  notif.read = true;
   updateNotifBadge();
+  // Update app icon badge count
+  var unread = myNotifications().filter(function(n){return !notifIsRead(n,DB.currentUser);}).length;
+  if('setAppBadge' in navigator){
+    if(unread>0) navigator.setAppBadge(unread).catch(function(){});
+    else navigator.clearAppBadge().catch(function(){});
+  }
 }
 
 // ── Auto-trigger push for key actions ────────────────────────────
