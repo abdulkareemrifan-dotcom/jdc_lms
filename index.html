@@ -3794,23 +3794,39 @@ async function pushNotification(title, body, category, page, targetUserIds){
     targetUsers = DB.users.filter(function(u){return targetUserIds.includes(u.id) && u.id!==senderId;});
   }
 
-  // Collect OneSignal player IDs, respecting per-user category preference
-  var playerIds = [];
-  targetUsers.forEach(function(u){
+  // Resolve target user IDs (external IDs registered via OneSignalManager.login)
+  var senderId = DB.currentUser ? DB.currentUser.id : '';
+  var externalIds = [];
+  if(!targetUserIds || targetUserIds === 'all'){
+    DB.users.forEach(function(u){ if(u.id !== senderId) externalIds.push(u.id); });
+  } else if(targetUserIds === 'students'){
+    DB.users.forEach(function(u){ if(u.role==='Student' && u.id!==senderId) externalIds.push(u.id); });
+  } else if(targetUserIds === 'teachers'){
+    DB.users.forEach(function(u){ if(u.role==='Teacher' && u.id!==senderId) externalIds.push(u.id); });
+  } else if(Array.isArray(targetUserIds)){
+    externalIds = targetUserIds.filter(function(id){ return id !== senderId; });
+  } else if(typeof targetUserIds === 'string' && targetUserIds !== senderId){
+    externalIds = [targetUserIds];
+  }
+
+  // Respect per-user category preference
+  externalIds = externalIds.filter(function(uid){
+    var u = DB.users.find(function(x){ return x.id===uid; });
+    if(!u) return false;
     var prefs = u.notifPrefs || {};
-    if(prefs[category||'announcements'] === false) return;
-    (u.oneSignalIds || []).forEach(function(pid){ playerIds.push(pid); });
+    return prefs[category||'announcements'] !== false;
   });
 
-  if(playerIds.length){
-    // Deliver background push via Vercel serverless function (free, no billing needed)
+  if(externalIds.length){
+    // Deliver background push via Vercel /api/push using OneSignal external user IDs
+    // — no player ID storage needed; OneSignal maps external IDs to devices automatically
     fetch('/api/push', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({title:title, body:body, page:page||'dashboard', playerIds:playerIds})
-    }).then(function(r){return r.json();}).then(function(d){
-      console.log('Push delivered to', d.sent, 'device(s)');
-    }).catch(function(e){console.warn('Push delivery error:',e);});
+      body: JSON.stringify({title:title, body:body, page:page||'dashboard', externalIds:externalIds})
+    }).then(function(r){ return r.json(); }).then(function(d){
+      console.log('Push delivered via OneSignal to', externalIds.length, 'user(s)', d);
+    }).catch(function(e){ console.warn('Push delivery error:',e); });
   }
   return notif;
 }
