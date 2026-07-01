@@ -86,11 +86,11 @@ var OneSignalManager = (function(){
 
     // Call after a user logs in — links their LMS user ID to their device
     login: function(externalId){
-      if(!externalId) return;
+      var id = externalId ? String(externalId).trim() : '';
+      if(!id || id === 'undefined' || id === 'null') return;
       OneSignalDeferred.push(function(OneSignal){
-        OneSignal.login(String(externalId)).then(function(){
-          console.log('OneSignal login ✅', externalId);
-          // Save ID in case it was already assigned before login
+        OneSignal.login(id).then(function(){
+          console.log('OneSignal login ✅', id);
           evaluateSubscriptionId(OneSignal.User.PushSubscription.id);
         }).catch(function(e){ console.warn('OneSignal login error:', e); });
       });
@@ -99,29 +99,28 @@ var OneSignalManager = (function(){
     // Call on logout
     logout: function(){
       OneSignalDeferred.push(function(OneSignal){
-        OneSignal.logout();
+        OneSignal.logout().catch(function(e){ console.warn('OneSignal logout error:', e); });
       });
     },
 
-    // Request push permission (called from "Enable Now" button and from
-    // the verification dialog's "Got it" button)
+    // Request push permission
     requestPermission: function(){
       return new Promise(function(resolve){
         OneSignalDeferred.push(function(OneSignal){
           OneSignal.Notifications.requestPermission(function(accepted){
-            if(accepted){
-              evaluateSubscriptionId(OneSignal.User.PushSubscription.id);
-            }
+            if(accepted) evaluateSubscriptionId(OneSignal.User.PushSubscription.id);
             resolve(accepted);
           });
         });
       });
     },
 
-    // Tag a user for segmentation in the OneSignal dashboard
+    // Tag a user — skip empty values to avoid "value is empty" SDK errors
     setTag: function(key, value){
+      var v = (value !== undefined && value !== null) ? String(value).trim() : '';
+      if(!key || !v) return;
       OneSignalDeferred.push(function(OneSignal){
-        OneSignal.User.addTag(key, String(value));
+        OneSignal.User.addTag(key, v);
       });
     },
 
