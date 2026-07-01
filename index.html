@@ -3809,15 +3809,13 @@ async function pushNotification(title, body, category, page, targetUserIds){
     } else {
       audience = { included_segments: ['Total Subscriptions'] };
     }
-    // os_v2_app_ keys use the new API endpoint with 'Key' auth (not 'Basic')
+    // os_v2_app_ keys use 'Key' auth; legacy keys use 'Basic'
+    // Always use v1 endpoint — it supports CORS from browsers
     var isNewKey = ONESIGNAL_REST_KEY.indexOf('os_v2_') === 0;
-    var apiUrl = isNewKey
-      ? 'https://api.onesignal.com/notifications'
-      : 'https://onesignal.com/api/v1/notifications';
     var authHeader = isNewKey
       ? 'Key ' + ONESIGNAL_REST_KEY
       : 'Basic ' + ONESIGNAL_REST_KEY;
-    fetch(apiUrl, {
+    fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -3836,7 +3834,7 @@ async function pushNotification(title, body, category, page, targetUserIds){
         try{ var d=JSON.parse(t);
           if(d.errors) console.warn('OneSignal errors:', JSON.stringify(d.errors));
           else console.log('OneSignal push sent to', d.recipients, 'recipients ✅');
-        }catch(e){ console.warn('OneSignal non-JSON response:', t.slice(0,200)); }
+        }catch(e){ console.warn('OneSignal non-JSON:', t.slice(0,200)); }
       });
     }).catch(function(e){ console.warn('OneSignal push error:', e); });
   }
