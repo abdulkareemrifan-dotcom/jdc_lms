@@ -1096,14 +1096,18 @@ window.showDua=showDua;
       <div style="flex:1"><label class="form-label" style="margin-bottom:2px">JDC Logo</label><div class="form-help" style="margin:0">Pulled automatically from Settings → Organization Logo</div></div>
       <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;white-space:nowrap"><input type="checkbox" id="lsShowLogo" checked> Show on card</label>
     </div>
-    <div class="form-group"><label class="form-label">Platform</label><select class="form-select" id="lsPlatform" onchange="onLsPlatformChange(this.value)"><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="Zoom">Zoom</option><option value="Google Meet">Google Meet</option><option value="Other">Other</option></select></div>
-    <div class="form-group"><label class="form-label" id="lsLinkLabel">YouTube Live URL <span class="req">*</span></label><input type="url" class="form-input" id="lsLink" placeholder="Paste the YouTube Live / Facebook / Zoom / Meet URL viewers will use"></div>
-    <div class="form-group"><label class="form-label">Recording URL <span style="color:var(--text-light);font-weight:400">(optional)</span></label><input type="url" class="form-input" id="lsRecordingUrl" placeholder="Link to the recording — shown to viewers after the session ends"></div>
-    <div class="form-group" style="border:1px dashed var(--border);border-radius:var(--radius-sm);padding:10px">
-      <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer"><input type="checkbox" id="lsUseRtmp" onchange="onLsUseRtmpChange(this.checked)"> This session also streams via RTMP (OBS / encoder)</label>
-      <div id="lsRtmpFields" style="display:none;margin-top:10px">
-        <div class="form-group"><label class="form-label">RTMP Server URL</label><input type="text" class="form-input" id="lsRtmpUrl" placeholder="rtmp://a.rtmp.youtube.com/live2"></div>
-        <div class="form-group" style="margin-bottom:0"><label class="form-label">Stream Key</label><div style="display:flex;gap:6px"><input type="password" class="form-input" id="lsRtmpKey" placeholder="Stream key"><button type="button" class="btn btn-outline btn-sm" onclick="toggleLsRtmpKeyVisibility()"><i class="fas fa-eye" id="lsRtmpKeyEye"></i></button></div><div class="form-help">Only visible to Admins and users with Manage/Broadcast permission — never shown on the viewer page.</div></div>
+    <div class="form-group"><label class="form-label">Platform</label><select class="form-select" id="lsPlatform" onchange="onLsPlatformChange(this.value)"><option value="YouTube">YouTube</option><option value="Facebook">Facebook</option><option value="Zoom">Zoom</option><option value="Google Meet">Google Meet</option><option value="Device Camera">My Device Camera (Live, in-app)</option><option value="Other">Other</option></select></div>
+    <div id="lsCameraNotice" style="display:none;background:var(--bg);border-radius:var(--radius-sm);padding:10px;margin-bottom:10px;font-size:0.8rem;color:var(--text-light)"><i class="fas fa-video"></i> No link needed. When you tap "Go Live," this device's camera &amp; microphone will broadcast directly to viewers inside the app. Keep this tab open while broadcasting.</div>
+    <div id="lsCameraPreviewWrap" style="display:none;margin-bottom:10px"><div id="lsCameraPreview" style="position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden;background:#000"></div><div class="form-help">Your camera preview — this is what viewers see</div></div>
+    <div id="lsLinkWrap">
+      <div class="form-group"><label class="form-label" id="lsLinkLabel">YouTube Live URL <span class="req">*</span></label><input type="url" class="form-input" id="lsLink" placeholder="Paste the YouTube Live / Facebook / Zoom / Meet URL viewers will use"></div>
+      <div class="form-group"><label class="form-label">Recording URL <span style="color:var(--text-light);font-weight:400">(optional)</span></label><input type="url" class="form-input" id="lsRecordingUrl" placeholder="Link to the recording — shown to viewers after the session ends"></div>
+      <div class="form-group" id="lsRtmpSection" style="border:1px dashed var(--border);border-radius:var(--radius-sm);padding:10px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer"><input type="checkbox" id="lsUseRtmp" onchange="onLsUseRtmpChange(this.checked)"> This session also streams via RTMP (OBS / encoder)</label>
+        <div id="lsRtmpFields" style="display:none;margin-top:10px">
+          <div class="form-group"><label class="form-label">RTMP Server URL</label><input type="text" class="form-input" id="lsRtmpUrl" placeholder="rtmp://a.rtmp.youtube.com/live2"></div>
+          <div class="form-group" style="margin-bottom:0"><label class="form-label">Stream Key</label><div style="display:flex;gap:6px"><input type="password" class="form-input" id="lsRtmpKey" placeholder="Stream key"><button type="button" class="btn btn-outline btn-sm" onclick="toggleLsRtmpKeyVisibility()"><i class="fas fa-eye" id="lsRtmpKeyEye"></i></button></div><div class="form-help">Only visible to Admins and users with Manage/Broadcast permission — never shown on the viewer page.</div></div>
+        </div>
       </div>
     </div>
     <div class="form-group"><label class="form-label">Who can view this session?</label><select class="form-select" id="lsAccessType" onchange="onLsAccessTypeChange(this.value)"><option value="all">Everyone (all students &amp; teachers)</option><option value="group">A specific class/group</option><option value="users">Specific selected users</option></select></div>
@@ -1583,6 +1587,76 @@ var currentOtpMethod="whatsapp";var currentOtpTarget="";
 // ===================== TRANSLATIONS =====================
 var I18N={
 en:{
+    addCustom:"Add Custom",
+    addOption:"Add Option",
+    allGroups:"All Groups",
+    alreadyExists:"Already exists",
+    approve:"Approve",
+    backupDownloaded:"Backup downloaded",
+    bookingCancelled:"Booking cancelled",
+    bookingConfirmed:"Booking confirmed",
+    bookingDate:"Booking Date",
+    cameraDenied:"Camera access denied",
+    certificateApproved:"Certificate approved",
+    certificateRejected:"Certificate rejected",
+    changeStatus:"Change Status",
+    confirmDelete:"Confirm delete",
+    confirmed:"Confirmed",
+    deleted:"Deleted",
+    downloadReport:"Download Report (Excel)",
+    enableRecordingUpload:"Enable Recording Upload",
+    endLive:"End Live",
+    enterThisCode:"Enter this code to verify",
+    essay:"Essay",
+    eventReport:"Event Report",
+    exportData:"Export Data",
+    exported:"Exported",
+    free:"Free",
+    goLive:"Go Live",
+    items:"items",
+    joinLive:"Join Live",
+    liveNow:"Live Now",
+    monthly:"Monthly",
+    multipleChoice:"Multiple Choice",
+    noBookings:"No bookings found",
+    noCertificates:"No certificates found",
+    noData:"No data available",
+    noDataToExport:"No data to export",
+    noEmailAvailable:"No email available",
+    noEventNames:"No events found",
+    noPendingCerts:"No pending certificates",
+    noRecording:"No recording available",
+    noSubmissions:"No submissions yet",
+    noUsers:"No users found",
+    notificationSent:"Notification sent",
+    nusukRequired:"Nusuk reference is required for Umrah/Hajj packages",
+    participants:"Participants",
+    paymentRequired:"Payment required",
+    pendingCertificates:"Pending Certificates",
+    question:"Question",
+    questionType:"Question Type",
+    recordingAttached:"Recording attached",
+    reject:"Reject",
+    rejected:"Rejected",
+    saved:"Saved",
+    search:"Search",
+    seats:"Seats",
+    selectEventName:"Select Event",
+    shareTicket:"Share Ticket",
+    shareViaEmail:"Share via Email",
+    shareViaWhatsApp:"Share via WhatsApp",
+    startConversation:"Start a conversation",
+    statusUpdated:"Status updated",
+    textAnswer:"Text Answer",
+    ticketNumber:"Ticket Number",
+    to:"To",
+    translate:"Translate",
+    trueFalse:"True/False",
+    typeDeleteConfirm:"Type DELETE to confirm",
+    videoUploaded:"Video uploaded",
+    waitingList:"Waiting List",
+    weekly:"Weekly",
+    yourOTP:"Your OTP code",
     login:"Login",
     register:"Register",
     mobileNumber:"Mobile Number",
@@ -3167,7 +3241,9 @@ function myNotifications(){
 }
 function updateNotifBadge(){var badge=$('notifBadge');if(!badge)return;var user=DB.currentUser;if(!user){badge.style.display='none';return}var unread=myNotifications().filter(function(n){return !notifIsRead(n,user);}).length;if(unread>0){badge.textContent=unread>9?'9+':unread;badge.style.display='flex'}else{badge.style.display='none'}}
 
-async function navigateTo(page){window._currentPage=page;window.currentPage=page;
+async function navigateTo(page){
+  if(window._agoraRole==='audience'&&(window._currentPage||window.currentPage)==='liveBroadcast'&&page!=='liveBroadcast'){try{leaveCameraViewer()}catch(e){}}
+  window._currentPage=page;window.currentPage=page;
   currentPage=page;
   document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});
   var nav=document.querySelector('[data-page="'+page+'"]');
@@ -6004,7 +6080,7 @@ function viewParticipantDetail(regId){var reg=DB.eventRegistrations.find(functio
 function updateRegStatusFromModal(regId,newStatus){updateRegistrationStatus(regId,newStatus);closeModal('participantModal');showAllRegistrations()}
 
 // ===================== DATA EXPORT & BULK DELETE =====================
-function exportData(category){var data=[],filename='';if(category==='students'){data=DB.users.filter(function(u){return u.role==='Student'}).map(function(u){return{ID:u.id,Name:u.name,Mobile:u.mobile,Email:u.email||'',Nationality:u.nationality||'',Group:u.classGroup,Gender:u.gender,Status:u.status,Teacher:getTeacherName(u.teacher)}});filename='students.csv'}else if(category==='teachers'){data=DB.users.filter(function(u){return u.role==='Teacher'}).map(function(u){return{ID:u.id,Name:u.name,Mobile:u.mobile,Email:u.email||'',Subject:u.subject||'',Status:u.status}});filename='teachers.csv'}else if(category==='assignments'){data=DB.assignments.map(function(a){return{ID:a.id,Title:a.title,Type:a.type,Group:a.classGroup,Marks:a.marks,Status:a.status,OpenDate:a.openDate||'',CloseDate:a.closeDate||''}});filename='assignments.csv'}else if(category==='submissions'){data=DB.submissions.map(function(s){var st=DB.users.find(function(u){return u.id===s.studentId});var a=DB.assignments.find(function(x){return x.id===s.assignmentId});return{SubmissionID:s.id,Student:st?st.name:'',Assignment:a?a.title:'',Marks:s.marks,Grade:s.grade,Status:s.status,Date:s.submittedDate}});filename='submissions.csv'}else if(category==='events'){data=DB.events.map(function(e){return{ID:e.id,Name:e.name,Date:e.date,Time:e.time,Venue:e.venue,Fees:e.fees,Status:e.status,Registrations:DB.eventRegistrations.filter(function(r){return r.eventId===e.id}).length}});filename='events.csv'}else if(category==='certificates'){data=DB.certificates.map(function(c){var st=DB.users.find(function(u){return u.id===c.studentId});return{ID:c.id,Student:st?st.name:'',Type:c.type,Date:c.date,Status:c.status,Remarks:c.remarks||''}});filename='certificates.csv'}if(data.length===0){showToast(t('noDataToExport'),'warning');return}var headers=Object.keys(data[0]);var csv=headers.join(',')+'\\n';data.forEach(function(row){csv+=headers.map(function(h){var val=String(row[h]||'');return '"'+val.replace(/"/g,'""')+'"'}).join(',')+'\\n'});var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=filename;link.click();showToast(t('exported')+': '+filename,'success');addAudit('DATA_EXPORT','Exported '+category)}
+function exportData(category){var data=[],filename='';if(category==='students'){data=DB.users.filter(function(u){return u.role==='Student'}).map(function(u){return{ID:u.id,Name:u.name,Mobile:u.mobile,Email:u.email||'',Nationality:u.nationality||'',Group:u.classGroup,Gender:u.gender,Status:u.status,Teacher:getTeacherName(u.teacher)}});filename='students.csv'}else if(category==='teachers'){data=DB.users.filter(function(u){return u.role==='Teacher'}).map(function(u){return{ID:u.id,Name:u.name,Mobile:u.mobile,Email:u.email||'',Subject:u.subject||'',Status:u.status}});filename='teachers.csv'}else if(category==='assignments'){data=DB.assignments.map(function(a){return{ID:a.id,Title:a.title,Type:a.type,Group:a.classGroup,Marks:a.marks,Status:a.status,OpenDate:a.openDate||'',CloseDate:a.closeDate||''}});filename='assignments.csv'}else if(category==='submissions'){data=DB.submissions.map(function(s){var st=DB.users.find(function(u){return u.id===s.studentId});var a=DB.assignments.find(function(x){return x.id===s.assignmentId});return{SubmissionID:s.id,Student:st?st.name:'',Assignment:a?a.title:'',Marks:s.marks,Grade:s.grade,Status:s.status,Date:s.submittedDate}});filename='submissions.csv'}else if(category==='events'){data=DB.events.map(function(e){return{ID:e.id,Name:e.name,Date:e.date,Time:e.time,Venue:e.venue,Fees:e.fees,Status:e.status,Registrations:DB.eventRegistrations.filter(function(r){return r.eventId===e.id}).length}});filename='events.csv'}else if(category==='registrations'){data=DB.eventRegistrations.map(function(r){var ev=DB.events.find(function(x){return x.id===r.eventId});var st=DB.users.find(function(u){return u.id===r.studentId});return{RegID:r.id,Event:ev?ev.name:'',Student:st?st.name:'',Ticket:r.ticketNo||'',Seats:r.totalSeats||'',Status:r.status,BookingDate:r.bookingDate||'',NusukRef:r.nusukRef||''}});filename='registrations.csv'}else if(category==='certificates'){data=DB.certificates.map(function(c){var st=DB.users.find(function(u){return u.id===c.studentId});return{ID:c.id,Student:st?st.name:'',Type:c.type,Date:c.date,Status:c.status,Remarks:c.remarks||''}});filename='certificates.csv'}if(data.length===0){showToast(t('noDataToExport'),'warning');return}var headers=Object.keys(data[0]);var csv=headers.join(',')+'\\n';data.forEach(function(row){csv+=headers.map(function(h){var val=String(row[h]||'');return '"'+val.replace(/"/g,'""')+'"'}).join(',')+'\\n'});var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=filename;link.click();showToast(t('exported')+': '+filename,'success');addAudit('DATA_EXPORT','Exported '+category)}
 function downloadFullBackup(){var backup={exportedAt:new Date().toISOString(),version:'2.0',data:DB};var blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});var link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download='jdc_portal_backup_'+new Date().toISOString().slice(0,10)+'.json';link.click();showToast(t('backupDownloaded'),'success');addAudit('BACKUP','Downloaded full backup')}
 var currentDeleteCategory=null;
 function confirmBulkDelete(category){currentDeleteCategory=category;var count=0;if(category==='students')count=DB.users.filter(function(u){return u.role==='Student'}).length;else if(category==='teachers')count=DB.users.filter(function(u){return u.role==='Teacher'}).length;else if(category==='assignments')count=DB.assignments.length;else if(category==='submissions')count=DB.submissions.length;else if(category==='results')count=DB.results.length;else if(category==='events')count=DB.events.length;else if(category==='certificates')count=DB.certificates.length;else if(category==='onlineClasses')count=DB.onlineClasses.length;else if(category==='messages')count=DB.messages.length;else if(category==='notifications')count=DB.notifications.length;else if(category==='eventRegistrations')count=DB.eventRegistrations.length;else if(category==='feedback')count=(DB.feedback||[]).length;$('bulkDeleteText').innerHTML=t('confirmDelete')+': <strong>'+category+'</strong> ('+count+' '+t('items')+')';$('bulkDeleteConfirm').value='';$('bulkDeleteBtn').onclick=function(){if($('bulkDeleteConfirm').value.trim()==='DELETE'){doBulkDelete(category)}else{showToast(t('typeDeleteConfirm'),'error')}};openModal('bulkDeleteModal')}
@@ -6413,6 +6489,10 @@ function jdcLogoData(){return(DB.settings&&DB.settings.logoData)||''}
 function onLsPlatformChange(val){
   var labels={YouTube:'YouTube Live URL',Facebook:'Facebook Live URL',Zoom:'Zoom Meeting Link','Google Meet':'Google Meet Link',Other:'Stream / Meeting Link'};
   var lbl=$('lsLinkLabel');if(lbl)lbl.innerHTML=(labels[val]||'Stream Link')+' <span class="req">*</span>';
+  var isCam=val==='Device Camera';
+  $('lsCameraNotice').style.display=isCam?'block':'none';
+  $('lsLinkWrap').style.display=isCam?'none':'block';
+  $('lsCameraPreviewWrap').style.display=(isCam&&window._agoraRole==='host')?'block':'none';
 }
 function onLsUseRtmpChange(checked){$('lsRtmpFields').style.display=checked?'block':'none'}
 function toggleLsRtmpKeyVisibility(){var f=$('lsRtmpKey');var eye=$('lsRtmpKeyEye');if(!f)return;if(f.type==='password'){f.type='text';eye.className='fas fa-eye-slash'}else{f.type='password';eye.className='fas fa-eye'}}
@@ -6435,7 +6515,7 @@ function setupLsLiveControls(s){
   $('lsResumeBtn').style.display=status==='Paused'?'inline-flex':'none';
   $('lsEndLiveBtn').style.display=(status==='Live'||status==='Paused')?'inline-flex':'none';
 }
-function goLiveFromModal(){var id=$('lsEditId').value;if(!id)return;goLiveSession(id);$('lsStatus').value='Live';setupLsLiveControls((DB.liveSessions||[]).find(function(x){return x.id===id}))}
+async function goLiveFromModal(){var id=$('lsEditId').value;if(!id)return;await goLiveSession(id);var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(s)$('lsStatus').value=s.status;setupLsLiveControls(s)}
 function pauseFromModal(){var id=$('lsEditId').value;if(!id)return;pauseLiveSession(id);$('lsStatus').value='Paused';setupLsLiveControls((DB.liveSessions||[]).find(function(x){return x.id===id}))}
 function resumeFromModal(){var id=$('lsEditId').value;if(!id)return;resumeLiveSession(id);$('lsStatus').value='Live';setupLsLiveControls((DB.liveSessions||[]).find(function(x){return x.id===id}))}
 function endLiveFromModal(){var id=$('lsEditId').value;if(!id)return;endLiveSession(id);$('lsStatus').value='Ended';setupLsLiveControls((DB.liveSessions||[]).find(function(x){return x.id===id}))}
@@ -6500,7 +6580,8 @@ function renderLsSelectedChips(){
 
 function saveLiveSession(){
   var editId=$('lsEditId').value;var title=$('lsTitle').value.trim();var link=$('lsLink').value.trim();var date=$('lsDate').value;
-  if(!title||!link||!date){showToast(t('fillRequired'),'error');return}
+  var platformCheck=$('lsPlatform').value;
+  if(!title||!date||(platformCheck!=='Device Camera'&&!link)){showToast(t('fillRequired'),'error');return}
   var accessType=$('lsAccessType').value;var access={type:accessType};
   if(accessType==='group')access.group=$('lsGroup').value;
   if(accessType==='users')access.userIds=lsSelectedUserIds.slice();
@@ -6625,25 +6706,133 @@ function checkLsReminders(){
   });
 }
 function lbAccessTargetValue(s){var a=s.access||{type:'all'};if(a.type==='users')return(a.userIds||[]);if(a.type==='group')return DB.users.filter(function(u){return u.classGroup===a.group}).map(function(u){return u.id});return'all'}
-function goLiveSession(id){
-  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;s.status='Live';
+
+// ===================== IN-APP CAMERA BROADCAST (Agora) =====================
+// One host (the broadcaster's own device camera+mic) streams to many viewers, entirely
+// inside this app — no YouTube/Facebook needed. Requires an Agora project (App ID + App
+// Certificate) and the /api/agora-token serverless function; see setup notes provided
+// separately. Falls back gracefully with a clear error if not configured.
+window._agoraClient=null;window._agoraRole=null;window._agoraChannel=null;
+window._agoraLocalTracks=null;window._agoraRemoteVideoTrack=null;window._agoraRemoteAudioTrack=null;
+function loadAgoraSDK(){
+  if(window.AgoraRTC)return Promise.resolve();
+  if(window._agoraSDKPromise)return window._agoraSDKPromise;
+  window._agoraSDKPromise=new Promise(function(resolve,reject){
+    var el=document.createElement('script');
+    el.src='https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js';
+    el.onload=function(){resolve()};
+    el.onerror=function(){reject(new Error('Could not load the video SDK. Check your internet connection.'))};
+    document.head.appendChild(el);
+  });
+  return window._agoraSDKPromise;
+}
+function lsNumericUid(){var id=(DB.currentUser&&DB.currentUser.id)||('u'+Date.now());var h=0;for(var i=0;i<id.length;i++){h=((h<<5)-h+id.charCodeAt(i))|0}return Math.abs(h)%1000000+1}
+function fetchAgoraToken(channel,role){
+  var uid=lsNumericUid();
+  return fetch('/api/agora-token?channel='+encodeURIComponent(channel)+'&role='+role+'&uid='+uid)
+    .then(function(r){if(!r.ok)return r.json().then(function(e){throw new Error(e.error||'Token request failed')});return r.json()})
+    .then(function(data){data.uid=uid;return data});
+}
+async function startCameraHost(sessionId){
+  await loadAgoraSDK();
+  var data=await fetchAgoraToken(sessionId,'host');
+  var client=AgoraRTC.createClient({mode:'live',codec:'vp8'});
+  await client.setClientRole('host');
+  await client.join(data.appId,sessionId,data.token,data.uid);
+  var tracks=await AgoraRTC.createMicrophoneAndCameraTracks();
+  await client.publish(tracks);
+  window._agoraClient=client;window._agoraChannel=sessionId;window._agoraRole='host';
+  window._agoraLocalTracks={audioTrack:tracks[0],videoTrack:tracks[1]};
+  return tracks[1];
+}
+function stopCameraHost(){
+  var t=window._agoraLocalTracks;
+  if(t){if(t.audioTrack){t.audioTrack.close()}if(t.videoTrack){t.videoTrack.close()}}
+  if(window._agoraClient)window._agoraClient.leave().catch(function(){});
+  window._agoraClient=null;window._agoraChannel=null;window._agoraRole=null;window._agoraLocalTracks=null;
+  var pv=$('lsCameraPreviewWrap');if(pv)pv.style.display='none';
+}
+function muteCameraHost(mute){
+  var t=window._agoraLocalTracks;if(!t)return;
+  if(t.videoTrack)t.videoTrack.setEnabled(!mute);
+  if(t.audioTrack)t.audioTrack.setEnabled(!mute);
+}
+async function joinCameraViewer(sessionId,containerId){
+  if(window._agoraClient&&window._agoraChannel===sessionId&&window._agoraRole==='audience'){
+    if(window._agoraRemoteVideoTrack){try{window._agoraRemoteVideoTrack.play(containerId)}catch(e){}}
+    return;
+  }
+  if(window._agoraClient)await leaveCameraViewer();
+  await loadAgoraSDK();
+  var data=await fetchAgoraToken(sessionId,'audience');
+  var client=AgoraRTC.createClient({mode:'live',codec:'vp8'});
+  await client.setClientRole('audience');
+  client.on('user-published',async function(remoteUser,mediaType){
+    await client.subscribe(remoteUser,mediaType);
+    if(mediaType==='video'){window._agoraRemoteVideoTrack=remoteUser.videoTrack;try{remoteUser.videoTrack.play(containerId)}catch(e){}}
+    if(mediaType==='audio'){window._agoraRemoteAudioTrack=remoteUser.audioTrack;remoteUser.audioTrack.play()}
+  });
+  await client.join(data.appId,sessionId,data.token,data.uid);
+  window._agoraClient=client;window._agoraChannel=sessionId;window._agoraRole='audience';
+}
+async function leaveCameraViewer(){
+  if(window._agoraClient){try{await window._agoraClient.leave()}catch(e){}}
+  window._agoraClient=null;window._agoraChannel=null;window._agoraRole=null;
+  window._agoraRemoteVideoTrack=null;window._agoraRemoteAudioTrack=null;
+}
+// Called after every Viewer-page render: (re)attach camera sessions that are Live, and
+// leave any channel we're subscribed to that's no longer live/visible on this page.
+function syncCameraViewers(sessions){
+  sessions.forEach(function(s){
+    if(s.platform==='Device Camera'&&liveSessionComputedStatus(s)==='Live'){
+      joinCameraViewer(s.id,'agoraVideo_'+s.id).catch(function(err){
+        var box=$('agoraVideo_'+s.id);if(box)box.innerHTML='<div style="color:white;text-align:center;padding-top:20%;font-size:0.8rem">Could not connect: '+esc(err.message||'')+'</div>';
+      });
+    }
+  });
+  if(window._agoraRole==='audience'&&window._agoraChannel){
+    var stillLive=sessions.some(function(s){return s.id===window._agoraChannel&&liveSessionComputedStatus(s)==='Live'});
+    if(!stillLive)leaveCameraViewer();
+  }
+}
+window.addEventListener('beforeunload',function(e){
+  if(window._agoraRole==='host'){e.preventDefault();e.returnValue='Your camera broadcast is still live. Are you sure you want to leave?';}
+});
+
+async function goLiveSession(id){
+  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;
+  if(s.platform==='Device Camera'){
+    try{
+      showToast('Requesting camera access…','success');
+      var videoTrack=await startCameraHost(id);
+      var pv=$('lsCameraPreviewWrap');
+      if(pv&&$('lsEditId')&&$('lsEditId').value===id){pv.style.display='block';videoTrack.play('lsCameraPreview')}
+    }catch(err){showToast('Could not start camera broadcast: '+(err&&err.message?err.message:err),'error');return}
+  }
+  s.status='Live';
   addAudit('LIVE_SESSION_GO_LIVE','Went live: '+s.title);
   fbSaveRecord('liveSessions',s,s.title+' is now LIVE',renderLiveBroadcastAdmin);
   pushNotification('Live now: '+s.title,(s.speaker?s.speaker+' — ':'')+'Tap to join the live session.','liveBroadcast','liveBroadcast',lbAccessTargetValue(s));
 }
 function pauseLiveSession(id){
-  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;s.status='Paused';
+  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;
+  if(s.platform==='Device Camera')muteCameraHost(true);
+  s.status='Paused';
   addAudit('LIVE_SESSION_PAUSE','Paused live: '+s.title);
   fbSaveRecord('liveSessions',s,s.title+' paused ⏸',renderLiveBroadcastAdmin);
 }
 function resumeLiveSession(id){
-  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;s.status='Live';
+  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;
+  if(s.platform==='Device Camera')muteCameraHost(false);
+  s.status='Live';
   addAudit('LIVE_SESSION_RESUME','Resumed live: '+s.title);
   fbSaveRecord('liveSessions',s,s.title+' is live again ▶',renderLiveBroadcastAdmin);
   pushNotification("We're back live: "+s.title,(s.speaker?s.speaker+' — ':'')+'The broadcast has resumed.','liveBroadcast','liveBroadcast',lbAccessTargetValue(s));
 }
 function endLiveSession(id){
-  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;s.status='Ended';
+  var s=(DB.liveSessions||[]).find(function(x){return x.id===id});if(!s)return;
+  if(s.platform==='Device Camera')stopCameraHost();
+  s.status='Ended';
   addAudit('LIVE_SESSION_END','Ended live: '+s.title);
   fbSaveRecord('liveSessions',s,s.title+' live session ended',renderLiveBroadcastAdmin);
 }
@@ -6702,6 +6891,7 @@ function renderLiveBroadcast(){
   else sessions.forEach(function(s){html+=renderLiveViewerCard(s)});
   $('mainContent').innerHTML=html;window._currentPage='liveBroadcast';window.currentPage='liveBroadcast';
   applyTranslations();startLbCountdowns();
+  syncCameraViewers(sessions);
 }
 function renderLiveViewerCard(s){
   var status=liveSessionComputedStatus(s);
@@ -6744,10 +6934,12 @@ function renderLiveViewerCard(s){
       html+='<div style="font-weight:700">Broadcast Paused</div>';
       html+='<div style="font-size:0.75rem;opacity:0.8;margin-top:4px">We\'ll be back shortly — stay tuned.</div>';
       html+='</div>'+overlay+'</div>';
+    }else if(s.platform==='Device Camera'){
+      html+='<div style="position:relative;padding-top:56.25%;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"><div id="agoraVideo_'+s.id+'" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.6);font-size:0.75rem">Connecting…</div>'+overlay+'</div>';
     }else if(s.embedUrl){
       html+='<div style="position:relative;padding-top:56.25%;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"><iframe src="'+esc(s.embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>'+overlay+'</div>';
     }
-    if(status==='Live')html+='<a href="'+esc(s.link)+'" target="_blank" class="oc-link" style="background:var(--danger);margin-top:10px"><i class="fas fa-external-link-alt"></i> Open in '+esc(s.platform||'app')+'</a>';
+    if(status==='Live'&&s.platform!=='Device Camera')html+='<a href="'+esc(s.link)+'" target="_blank" class="oc-link" style="background:var(--danger);margin-top:10px"><i class="fas fa-external-link-alt"></i> Open in '+esc(s.platform||'app')+'</a>';
     if(status==='Live'){
       var isRecordingThis=(window._lsRecordingSessionId===s.id);
       if(deviceRecordingSupported()){
