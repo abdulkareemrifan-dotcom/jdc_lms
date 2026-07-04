@@ -1,0 +1,40 @@
+{
+  "name": "JDC-LMS - Jeddah Dawah Center",
+  "short_name": "JDC-LMS",
+  "description": "Jeddah Dawah Center — Tamil Section Learning Management System",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#095996",
+  "theme_color": "#095996",
+  "lang": "en",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-192-any.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["education"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Home",
+      "url": "./"
+    }
+  ]
+}
