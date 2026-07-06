@@ -583,11 +583,24 @@ window.showDua=showDua;
       <div id="roleSelector">
         <p style="text-align:center;color:var(--text-light);font-size:0.8rem;margin-bottom:14px" data-i18n="selectRole"></p>
         <div class="role-cards">
-          <div class="role-card" onclick="selectLoginRole('Student')">
+          <div class="role-card" onclick="selectLoginRole('Student')" style="border-color:var(--primary);border-width:2px">
             <div class="role-icon" style="background:linear-gradient(135deg,var(--primary),var(--primary-light))"><i class="fas fa-user-graduate"></i></div>
             <div class="role-name">Student</div>
             <div class="role-desc">Mobile + Password</div>
           </div>
+        </div>
+        <p style="text-align:center;color:var(--text-light);font-size:0.75rem;margin:16px 0 8px" data-i18n="notAStudent"></p>
+        <div class="role-card" onclick="showStaffLogin()" style="justify-content:center;gap:8px;background:transparent">
+          <i class="fas fa-lock" style="font-size:0.85rem;color:var(--text-light)"></i>
+          <span style="font-size:0.85rem;color:var(--text-light);font-weight:600" data-i18n="staffLogin"></span>
+        </div>
+      </div>
+      <div id="staffRoleSelector" class="hidden">
+        <div style="display:flex;align-items:center;margin-bottom:14px;gap:10px">
+          <button class="btn btn-icon btn-sm" onclick="backToMainRoleSelector()" style="background:var(--bg);color:var(--text)"><i class="fas fa-arrow-left"></i></button>
+          <p style="font-size:0.85rem;font-weight:600;color:var(--text);margin:0" data-i18n="staffLogin"></p>
+        </div>
+        <div class="role-cards">
           <div class="role-card" onclick="selectLoginRole('Teacher')">
             <div class="role-icon" style="background:linear-gradient(135deg,var(--info),#4fc3f7)"><i class="fas fa-chalkboard-teacher"></i></div>
             <div class="role-name">Teacher</div>
@@ -1822,6 +1835,8 @@ en:{
     areYouSure:"Are you sure?",
     delete:"Delete",
     selectRole:"Select your role to continue",
+    notAStudent:"Not a student?",
+    staffLogin:"Staff login (Teacher / Admin)",
     studentLogin:"Student Login",
     teacherLogin:"Teacher Login",
     adminLogin:"Administrator Login",
@@ -2243,6 +2258,8 @@ ta:{
     translate:"மொழிபெயர்ப்பு",
     declarationRequired:"தொடர கூற்றைத் தேர்வு செய்யவும்",
     selectRole:"தொடர உங்கள் பங்கைத் தேர்வு செய்யவும்",
+    notAStudent:"மாணவர் இல்லையா?",
+    staffLogin:"பணியாளர் உள்நுழைவு (ஆசிரியர் / நிர்வாகி)",
     studentLogin:"மாணவர் உள்நுழைவு",
     teacherLogin:"ஆசிரியர் உள்நுழைவு",
     adminLogin:"நிர்வாகி உள்நுழைவு",
@@ -2593,6 +2610,8 @@ si:{
     translate:"පරිවර්තනය",
     declarationRequired:"ඉදිරියට යාමට ප්‍රකාශනය තේරීම",
     selectRole:"ඉදිරියට යාමට ඔබගේ භූමිකාව තෝරන්න",
+    notAStudent:"ශිෂ්‍යයෙක් නොවේද?",
+    staffLogin:"කාර්ය මණ්ඩල පිවිසුම (ගුරු / පරිපාලක)",
     studentLogin:"ශිෂ්‍ය පිවිසුම",
     teacherLogin:"ගුරු පිවිසුම",
     adminLogin:"පරිපාලක පිවිසුම",
@@ -3066,7 +3085,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.06.2';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.06.3';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -3177,8 +3196,10 @@ function resetDB(){DB=JSON.parse(JSON.stringify(DB_DEFAULT));saveDB();showToast(
 function hideDua(){$("duaScreen").classList.add("hidden");$("authScreen").classList.remove("hidden");if(typeof pwaBannerShown!=="undefined")pwaBannerShown=false;if(typeof showPWABanner==="function")setTimeout(showPWABanner,500)}
 window.hideDua=hideDua;
 function switchAuthTab(tab,el){document.querySelectorAll(".auth-tab").forEach(function(t){t.classList.remove("active")});el.classList.add("active");if(tab==="login"){$("loginForm").classList.remove("hidden");$("registerForm").classList.add("hidden");backToRoleSelector()}else{$("loginForm").classList.add("hidden");$("registerForm").classList.remove("hidden");if(typeof populateAssClassGroup==="function")populateAssClassGroup()}}
-function backToRoleSelector(){$("roleSelector").classList.remove("hidden");$("roleLoginForm").classList.add("hidden");$("loginRole").value="";$("loginMobile").value="";$("loginUsername").value="";$("loginPassword").value=""}
-function selectLoginRole(role){$("loginRole").value=role;$("roleSelector").classList.add("hidden");$("roleLoginForm").classList.remove("hidden");var icon=$("roleLoginIcon");var title=$("roleLoginTitle");var stField=$("studentLoginField");var teField=$("teacherLoginField");if(role==="Student"){if(icon){icon.style.background="linear-gradient(135deg,var(--primary),var(--primary-light))";icon.innerHTML='<i class="fas fa-user-graduate"></i>'}if(title)title.textContent=t("studentLogin");if(stField)stField.classList.remove("hidden");if(teField)teField.classList.add("hidden");if($("loginMobile"))$("loginMobile").focus()}else if(role==="Teacher"){if(icon){icon.style.background="linear-gradient(135deg,var(--info),#4fc3f7)";icon.innerHTML='<i class="fas fa-chalkboard-teacher"></i>'}if(title)title.textContent=t("teacherLogin");if(stField)stField.classList.add("hidden");if(teField)teField.classList.remove("hidden");if($("loginUsername"))$("loginUsername").focus()}else if(role==="Admin"){if(icon){icon.style.background="linear-gradient(135deg,var(--danger),#ef5350)";icon.innerHTML='<i class="fas fa-user-shield"></i>'}if(title)title.textContent=t("adminLogin");if(stField)stField.classList.add("hidden");if(teField)teField.classList.remove("hidden");if($("loginUsername"))$("loginUsername").focus()}}
+function backToRoleSelector(){if(window._loginFromStaff){$("staffRoleSelector").classList.remove("hidden");$("roleSelector").classList.add("hidden")}else{$("roleSelector").classList.remove("hidden");$("staffRoleSelector").classList.add("hidden")}$("roleLoginForm").classList.add("hidden");$("loginRole").value="";$("loginMobile").value="";$("loginUsername").value="";$("loginPassword").value=""}
+function showStaffLogin(){$("roleSelector").classList.add("hidden");$("staffRoleSelector").classList.remove("hidden")}
+function backToMainRoleSelector(){$("staffRoleSelector").classList.add("hidden");$("roleSelector").classList.remove("hidden")}
+function selectLoginRole(role){window._loginFromStaff=(role==='Teacher'||role==='Admin');$("loginRole").value=role;$("roleSelector").classList.add("hidden");$("staffRoleSelector").classList.add("hidden");$("roleLoginForm").classList.remove("hidden");var icon=$("roleLoginIcon");var title=$("roleLoginTitle");var stField=$("studentLoginField");var teField=$("teacherLoginField");if(role==="Student"){if(icon){icon.style.background="linear-gradient(135deg,var(--primary),var(--primary-light))";icon.innerHTML='<i class="fas fa-user-graduate"></i>'}if(title)title.textContent=t("studentLogin");if(stField)stField.classList.remove("hidden");if(teField)teField.classList.add("hidden");if($("loginMobile"))$("loginMobile").focus()}else if(role==="Teacher"){if(icon){icon.style.background="linear-gradient(135deg,var(--info),#4fc3f7)";icon.innerHTML='<i class="fas fa-chalkboard-teacher"></i>'}if(title)title.textContent=t("teacherLogin");if(stField)stField.classList.add("hidden");if(teField)teField.classList.remove("hidden");if($("loginUsername"))$("loginUsername").focus()}else if(role==="Admin"){if(icon){icon.style.background="linear-gradient(135deg,var(--danger),#ef5350)";icon.innerHTML='<i class="fas fa-user-shield"></i>'}if(title)title.textContent=t("adminLogin");if(stField)stField.classList.add("hidden");if(teField)teField.classList.remove("hidden");if($("loginUsername"))$("loginUsername").focus()}}
 var SESSION_KEY="jdc_session";var OTP_STORE={};
 function hashPassword(pw){var hash=0;if(!pw)return String(hash);for(var i=0;i<pw.length;i++){var c=pw.charCodeAt(i);hash=((hash<<5)-hash)+c;hash=hash&hash}return"h"+Math.abs(hash).toString(36)}
 function startSessionTimeout(){var mins=(DB.settings&&DB.settings.sessionTimeout)||30;var ms=mins*60*1000;clearTimeout(window._sessionTimer);window._sessionTimer=setTimeout(function(){doLogout()},ms)}
