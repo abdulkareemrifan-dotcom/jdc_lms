@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tawaf & Sa'ee Counter</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  background: linear-gradient(160deg, #0d3b1e 0%, #1a5c3a 40%, #d4af37 100%);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+}
+#app {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(0,0,0,0.15);
+  border-radius: 20px;
+  padding: 20px;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+.header { margin-bottom: 12px; }
+.header-icon { font-size: 42px; margin-bottom: 4px; }
+.header h1 { font-size: 20px; font-weight: 600; color: #f5e6a3; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.header p { font-size: 12px; color: #c8e6c9; opacity: 0.9; margin-top: 3px; }
+
+.tabs { display: flex; justify-content: center; gap: 6px; margin-bottom: 14px; }
+.tab-btn {
+  flex: 1; padding: 10px 0; border-radius: 10px; border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.3s;
+}
+.tab-btn.active-tawaf { background: #f5e6a3; color: #0d3b1e; border-color: #f5e6a3; font-weight: 700; }
+.tab-btn.active-saee { background: #81c784; color: #fff; border-color: #81c784; font-weight: 700; }
+
+.mode-bar {
+  display: flex; justify-content: center; gap: 6px; margin-bottom: 14px;
+  background: rgba(0,0,0,0.15); padding: 6px; border-radius: 10px;
+}
+.mode-btn {
+  flex: 1; padding: 7px 0; border-radius: 8px; border: none;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s;
+}
+.mode-btn.active { background: #fff; color: #0d3b1e; font-weight: 700; }
+.mode-btn.inactive { background: transparent; color: #c8e6c9; }
+
+.sec-title { font-size: 13px; margin-bottom: 10px; font-weight: 600; }
+.sec-title.tawaf { color: #f5e6a3; }
+.sec-title.saee { color: #81c784; }
+
+.ring-wrap { position: relative; width: 200px; height: 200px; margin: 0 auto 18px; }
+.ring-wrap svg { transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: rgba(255,255,255,0.15); stroke-width: 12; }
+.ring-fill { fill: none; stroke-width: 12; stroke-linecap: round; stroke-dasharray: 490; stroke-dashoffset: 490; transition: stroke-dashoffset 0.5s ease; }
+.ring-fill.tawaf { stroke: #f5e6a3; }
+.ring-fill.saee { stroke: #81c784; }
+.ring-center {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  text-align: center;
+}
+.ring-count { font-size: 48px; font-weight: 700; line-height: 1; }
+.ring-count.tawaf { color: #f5e6a3; }
+.ring-count.saee { color: #81c784; }
+.ring-label { font-size: 13px; color: #c8e6c9; margin-top: 4px; }
+
+.rounds { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; padding: 0 6px; }
+.round-btn {
+  width: 42px; height: 42px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.3s; display: flex; align-items: center; justify-content: center;
+}
+.round-btn.done-tawaf { background: #f5e6a3; border-color: #f5e6a3; color: #0d3b1e; box-shadow: 0 0 10px rgba(212,175,55,0.5); }
+.round-btn.done-saee { background: #81c784; border-color: #81c784; color: #1b5e20; box-shadow: 0 0 10px rgba(129,199,132,0.5); }
+
+.auto-controls { margin-bottom: 12px; }
+.auto-timer { font-size: 12px; color: #c8e6c9; margin-bottom: 8px; }
+.auto-btns { display: flex; justify-content: center; gap: 8px; }
+.btn-start {
+  padding: 10px 24px; border-radius: 22px; border: none; font-size: 14px; font-weight: 700;
+  cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s;
+}
+.btn-start.tawaf { background: linear-gradient(90deg, #f5e6a3, #d4af37); color: #0d3b1e; }
+.btn-start.saee { background: linear-gradient(90deg, #81c784, #4caf50); color: #fff; }
+.btn-start:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-pause, .btn-stop {
+  padding: 10px 20px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.3);
+  background: transparent; color: #c8e6c9; font-size: 13px; cursor: pointer;
+}
+.btn-pause.tawaf { border-color: #f5e6a3; color: #f5e6a3; }
+.btn-pause.saee { border-color: #81c784; color: #81c784; }
+
+.btn-next {
+  width: 85%; max-width: 300px; padding: 12px 24px; border-radius: 25px; border: none;
+  font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: transform 0.2s;
+}
+.btn-next.tawaf { background: linear-gradient(90deg, #f5e6a3, #d4af37); color: #0d3b1e; }
+.btn-next.saee { background: linear-gradient(90deg, #81c784, #4caf50); color: #fff; }
+.btn-next:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-reset {
+  width: 85%; max-width: 300px; padding: 8px 20px; border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.3); background: transparent; color: #c8e6c9;
+  font-size: 12px; cursor: pointer; margin-bottom: 12px;
+}
+
+.dua-box {
+  background: rgba(0,0,0,0.2); border-radius: 12px; padding: 12px; margin: 0 8px;
+  font-size: 12px; line-height: 1.6; color: #e8f5e9; border: 1px solid rgba(255,255,255,0.1);
+  min-height: 55px;
+}
+.dua-label { font-size: 11px; margin-bottom: 4px; font-weight: 600; }
+.dua-label.tawaf { color: #d4af37; }
+.dua-label.saee { color: #81c784; }
+
+.comp-msg {
+  display: none; margin-top: 10px; padding: 10px; border-radius: 10px;
+  font-size: 13px; font-weight: 600;
+}
+.comp-msg.tawaf { background: rgba(245,230,163,0.2); border: 1px solid #f5e6a3; color: #f5e6a3; }
+.comp-msg.saee { background: rgba(129,199,132,0.2); border: 1px solid #81c784; color: #81c784; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="header">
+    <div class="header-icon">🕋</div>
+    <h1>Tawaf & Sa'ee Counter</h1>
+    <p>Auto or Manual — 7 Rounds Each</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active-tawaf" id="tab-tawaf" onclick="switchTab('tawaf')">🕋 Tawaf</button>
+    <button class="tab-btn" id="tab-saee" onclick="switchTab('saee')">🏃 Sa'ee</button>
+  </div>
+
+  <div class="mode-bar">
+    <button class="mode-btn active" id="mode-manual" onclick="setMode('manual')">👆 Manual</button>
+    <button class="mode-btn inactive" id="mode-auto" onclick="setMode('auto')">▶️ Auto</button>
+  </div>
+
+  <div id="section-tawaf">
+    <div class="sec-title tawaf">🕋 Tawaf — 7 Rounds Around Kaaba</div>
+
+    <div class="ring-wrap">
+      <svg width="200" height="200">
+        <circle class="ring-bg" cx="100" cy="100" r="78"/>
+        <circle class="ring-fill tawaf" id="ring-tawaf" cx="100" cy="100" r="78"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-count tawaf" id="disp-tawaf">0</div>
+        <div class="ring-label">of 7</div>
+      </div>
+    </div>
+
+    <div class="rounds" id="tawaf-buttons">
+      <button class="round-btn" id="btn-tawaf-1" onclick="toggleRound('tawaf',1)">1</button>
+      <button class="round-btn" id="btn-tawaf-2" onclick="toggleRound('tawaf',2)">2</button>
+      <button class="round-btn" id="btn-tawaf-3" onclick="toggleRound('tawaf',3)">3</button>
+      <button class="round-btn" id="btn-tawaf-4" onclick="toggleRound('tawaf',4)">4</button>
+      <button class="round-btn" id="btn-tawaf-5" onclick="toggleRound('tawaf',5)">5</button>
+      <button class="round-btn" id="btn-tawaf-6" onclick="toggleRound('tawaf',6)">6</button>
+      <button class="round-btn" id="btn-tawaf-7" onclick="toggleRound('tawaf',7)">7</button>
+    </div>
+
+    <div class="auto-controls hidden" id="tawaf-auto-controls">
+      <div class="auto-timer">Auto-advance every <span id="tawaf-timer-display">5</span> sec</div>
+      <div class="auto-btns">
+        <button class="btn-start tawaf" id="start-tawaf" onclick="startAuto('tawaf')">▶️ Start</button>
+        <button class="btn-pause tawaf hidden" id="pause-tawaf" onclick="pauseAuto('tawaf')">⏸️ Pause</button>
+        <button class="btn-stop" onclick="stopAuto('tawaf')">⏹️ Stop</button>
+      </div>
+    </div>
+
+    <button class="btn-next tawaf" id="next-tawaf" onclick="nextRound('tawaf')">✅ Complete Round</button>
+    <button class="btn-reset" onclick="resetAll('tawaf')">🔄 Reset Tawaf</button>
+
+    <div class="dua-box">
+      <div class="dua-label tawaf">🤲 Dua for Tawaf</div>
+      <div id="dua-text-tawaf">"Bismillahi Allahu Akbar"<br>Start your Tawaf by selecting mode above.</div>
+    </div>
+    <div class="comp-msg tawaf" id="comp-tawaf">🎉 Tawaf Completed! May Allah accept it.</div>
+  </div>
+
+  <div id="section-saee" class="hidden">
+    <div class="sec-title saee">🏃 Sa'ee — 7 Rounds Between Safa & Marwa</div>
+
+    <div class="ring-wrap">
+      <svg width="200" height="200">
+        <circle class="ring-bg" cx="100" cy="100" r="78"/>
+        <circle class="ring-fill saee" id="ring-saee" cx="100" cy="100" r="78"/>
+      </svg>
+      <div class="ring-center">
+        <div class="ring-count saee" id="disp-saee">0</div>
+        <div class="ring-label">of 7</div>
+      </div>
+    </div>
+
+    <div class="rounds" id="saee-buttons">
+      <button class="round-btn" id="btn-saee-1" onclick="toggleRound('saee',1)">1</button>
+      <button class="round-btn" id="btn-saee-2" onclick="toggleRound('saee',2)">2</button>
+      <button class="round-btn" id="btn-saee-3" onclick="toggleRound('saee',3)">3</button>
+      <button class="round-btn" id="btn-saee-4" onclick="toggleRound('saee',4)">4</button>
+      <button class="round-btn" id="btn-saee-5" onclick="toggleRound('saee',5)">5</button>
+      <button class="round-btn" id="btn-saee-6" onclick="toggleRound('saee',6)">6</button>
+      <button class="round-btn" id="btn-saee-7" onclick="toggleRound('saee',7)">7</button>
+    </div>
+
+    <div class="auto-controls hidden" id="saee-auto-controls">
+      <div class="auto-timer">Auto-advance every <span id="saee-timer-display">5</span> sec</div>
+      <div class="auto-btns">
+        <button class="btn-start saee" id="start-saee" onclick="startAuto('saee')">▶️ Start</button>
+        <button class="btn-pause saee hidden" id="pause-saee" onclick="pauseAuto('saee')">⏸️ Pause</button>
+        <button class="btn-stop" onclick="stopAuto('saee')">⏹️ Stop</button>
+      </div>
+    </div>
+
+    <button class="btn-next saee" id="next-saee" onclick="nextRound('saee')">✅ Complete Round</button>
+    <button class="btn-reset" onclick="resetAll('saee')">🔄 Reset Sa'ee</button>
+
+    <div class="dua-box">
+      <div class="dua-label saee">🤲 Dua for Sa'ee</div>
+      <div id="dua-text-saee">Start at Safa:<br>"Inna safa wal-marwata min sha'aairillah"</div>
+    </div>
+    <div class="comp-msg saee" id="comp-saee">🎉 Sa'ee Completed! May Allah accept it.</div>
+  </div>
+</div>
+
+<script>
+  let tawafRounds = new Set();
+  let saeeRounds = new Set();
+  let currentTab = 'tawaf';
+  let currentMode = 'manual';
+  let autoTimers = { tawaf: null, saee: null };
+  let autoPaused = { tawaf: false, saee: false };
+  const circumference = 490;
+  const AUTO_INTERVAL = 5000;
+
+  const tawafDuas = {
+    0: '"Bismillahi Allahu Akbar"<br>Start your Tawaf by selecting mode above.',
+    1: 'Round 1 Complete 🕋<br>"Rabbana atina fid-dunya hasanatan wa fil-akhirati hasanatan wa qina adhaban-nar"',
+    2: 'Round 2 Complete 🕋<br>"SubhanAllahi wa bihamdihi, SubhanAllahi al-Azeem"',
+    3: 'Round 3 Complete 🕋<br>"La ilaha illAllahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu"',
+    4: 'Round 4 Complete 🕋<br>"Astaghfirullaha al-azeem alladhi la ilaha illa huwal-hayyul-qayyumu wa atubu ilayh"',
+    5: 'Round 5 Complete 🕋<br>"Allahumma salli ala Muhammadin wa ala ali Muhammadin"',
+    6: 'Round 6 Complete 🕋<br>"Allahumma inni as\'aluka al-jannata wa a\'udhu bika minan-nar"',
+    7: 'Round 7 Complete 🕋<br>"Allahumma taqabbal minna innaka antas-Samee\'ul-Aleem"<br><br>🎉 Tawaf Completed! May Allah accept it.'
+  };
+
+  const saeeDuas = {
+    0: 'Start at Safa:<br>"Inna safa wal-marwata min sha\'aairillah"<br>Then climb Safa and face Qibla, make dua.',
+    1: 'Round 1 Complete 🏃<br>Walk toward Marwa. Green lights = run fast. Make dhikr while walking.',
+    2: 'Round 2 Complete 🏃<br>At Marwa, face Qibla and make dua. Then return to Safa.',
+    3: 'Round 3 Complete 🏃<br>Between the two green lights — men should run fast, women walk normally.',
+    4: 'Round 4 Complete 🏃<br>Keep making dhikr and dua throughout your walk.',
+    5: 'Round 5 Complete 🏃<br>"Rabbighfir warham wa tajawaz amma ta\'lam..."',
+    6: 'Round 6 Complete 🏃<br>Almost there! Keep your intention pure and heart focused on Allah.',
+    7: 'Round 7 Complete 🏃<br>At Marwa, make final dua. Sa\'ee is complete!<br>🎉 May Allah accept your Umrah/Hajj.'
+  };
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('section-tawaf').classList.toggle('hidden', tab !== 'tawaf');
+    document.getElementById('section-saee').classList.toggle('hidden', tab !== 'saee');
+
+    const tBtn = document.getElementById('tab-tawaf');
+    const sBtn = document.getElementById('tab-saee');
+
+    if (tab === 'tawaf') {
+      tBtn.classList.add('active-tawaf'); tBtn.classList.remove('active-saee');
+      sBtn.classList.remove('active-tawaf', 'active-saee');
+    } else {
+      sBtn.classList.add('active-saee'); sBtn.classList.remove('active-tawaf');
+      tBtn.classList.remove('active-tawaf', 'active-saee');
+    }
+    setMode(currentMode);
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    const mBtn = document.getElementById('mode-manual');
+    const aBtn = document.getElementById('mode-auto');
+
+    if (mode === 'manual') {
+      mBtn.classList.add('active'); mBtn.classList.remove('inactive');
+      aBtn.classList.add('inactive'); aBtn.classList.remove('active');
+      document.getElementById('tawaf-buttons').classList.remove('hidden');
+      document.getElementById('saee-buttons').classList.remove('hidden');
+      document.getElementById('tawaf-auto-controls').classList.add('hidden');
+      document.getElementById('saee-auto-controls').classList.add('hidden');
+      document.getElementById('next-tawaf').classList.remove('hidden');
+      document.getElementById('next-saee').classList.remove('hidden');
+    } else {
+      aBtn.classList.add('active'); aBtn.classList.remove('inactive');
+      mBtn.classList.add('inactive'); mBtn.classList.remove('active');
+      document.getElementById('tawaf-buttons').classList.add('hidden');
+      document.getElementById('saee-buttons').classList.add('hidden');
+      document.getElementById('tawaf-auto-controls').classList.remove('hidden');
+      document.getElementById('saee-auto-controls').classList.remove('hidden');
+      document.getElementById('next-tawaf').classList.add('hidden');
+      document.getElementById('next-saee').classList.add('hidden');
+    }
+  }
+
+  function getSet(type) { return type === 'tawaf' ? tawafRounds : saeeRounds; }
+
+  function toggleRound(type, n) {
+    const set = getSet(type);
+    const doneClass = type === 'tawaf' ? 'done-tawaf' : 'done-saee';
+
+    if (set.has(n)) {
+      for (let i = n; i <= 7; i++) {
+        set.delete(i);
+        const btn = document.getElementById('btn-' + type + '-' + i);
+        btn.classList.remove('done-tawaf', 'done-saee');
+      }
+    } else {
+      for (let i = 1; i <= n; i++) {
+        set.add(i);
+        const btn = document.getElementById('btn-' + type + '-' + i);
+        btn.classList.add(doneClass);
+      }
+    }
+    updateDisplay(type);
+  }
+
+  function nextRound(type) {
+    const set = getSet(type);
+    let next = 1;
+    while (set.has(next) && next < 7) next++;
+    if (set.has(next)) return;
+    toggleRound(type, next);
+  }
+
+  function startAuto(type) {
+    const set = getSet(type);
+    if (set.size >= 7) return;
+
+    autoPaused[type] = false;
+    document.getElementById('start-' + type).classList.add('hidden');
+    document.getElementById('pause-' + type).classList.remove('hidden');
+    document.getElementById('pause-' + type).textContent = '⏸️ Pause';
+
+    if (set.size === 0) {
+      toggleRound(type, 1);
+    }
+
+    autoTimers[type] = setInterval(() => {
+      if (autoPaused[type]) return;
+      const s = getSet(type);
+      if (s.size >= 7) {
+        stopAuto(type);
+        return;
+      }
+      nextRound(type);
+    }, AUTO_INTERVAL);
+  }
+
+  function pauseAuto(type) {
+    autoPaused[type] = !autoPaused[type];
+    const btn = document.getElementById('pause-' + type);
+    btn.textContent = autoPaused[type] ? '▶️ Resume' : '⏸️ Pause';
+  }
+
+  function stopAuto(type) {
+    if (autoTimers[type]) {
+      clearInterval(autoTimers[type]);
+      autoTimers[type] = null;
+    }
+    autoPaused[type] = false;
+    document.getElementById('start-' + type).classList.remove('hidden');
+    document.getElementById('pause-' + type).classList.add('hidden');
+    document.getElementById('pause-' + type).textContent = '⏸️ Pause';
+  }
+
+  function updateDisplay(type) {
+    const set = getSet(type);
+    const count = set.size;
+    document.getElementById('disp-' + type).textContent = count;
+
+    const ring = document.getElementById('ring-' + type);
+    const offset = circumference - (count / 7) * circumference;
+    ring.style.strokeDashoffset = offset;
+
+    const duas = type === 'tawaf' ? tawafDuas : saeeDuas;
+    document.getElementById('dua-text-' + type).innerHTML = duas[count] || duas[0];
+
+    const comp = document.getElementById('comp-' + type);
+    const nextBtn = document.getElementById('next-' + type);
+    const startBtn = document.getElementById('start-' + type);
+
+    if (count === 7) {
+      comp.style.display = 'block';
+      if (nextBtn) { nextBtn.textContent = '🎉 All 7 Done!'; nextBtn.disabled = true; }
+      if (startBtn) { startBtn.textContent = '✅ Finished'; startBtn.disabled = true; }
+      stopAuto(type);
+    } else {
+      comp.style.display = 'none';
+      if (nextBtn) { nextBtn.textContent = '✅ Complete Round ' + (count + 1); nextBtn.disabled = false; }
+      if (startBtn) { startBtn.textContent = '▶️ Start'; startBtn.disabled = false; }
+    }
+  }
+
+  function resetAll(type) {
+    stopAuto(type);
+    const set = getSet(type);
+    set.clear();
+    for (let i = 1; i <= 7; i++) {
+      const btn = document.getElementById('btn-' + type + '-' + i);
+      btn.classList.remove('done-tawaf', 'done-saee');
+    }
+    updateDisplay(type);
+  }
+</script>
+
+</body>
+</html>
