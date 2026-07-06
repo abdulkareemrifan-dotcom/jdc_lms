@@ -217,6 +217,9 @@ html{overflow-x:hidden}body{font-family:'Segoe UI',system-ui,sans-serif;backgrou
 
 
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes syncPulse{0%{box-shadow:0 0 0 0 rgba(39,174,96,0.6)}70%{box-shadow:0 0 0 6px rgba(39,174,96,0)}100%{box-shadow:0 0 0 0 rgba(39,174,96,0)}}
+#syncLiveDot{animation:syncPulse 2s infinite;border:2px solid var(--primary-dark)}
+#syncLiveDot.offline{background:var(--text-light) !important;animation:none}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--primary-light);border-radius:4px}
 .lang-switcher{position:fixed;top:70px;right:12px;z-index:5;display:flex;gap:4px;background:var(--card-bg);padding:4px;border-radius:20px;box-shadow:var(--shadow)}
@@ -660,7 +663,7 @@ window.showDua=showDua;
         <button class="lang-btn" onclick="setLanguage('ta')">Tamil</button>
         <button class="lang-btn" onclick="setLanguage('si')">Sinhala</button>
       </div>
-      <button class="header-btn" id="syncDataBtn" onclick="forceSyncNow()" title="Sync Data"><i class="fas fa-sync-alt" id="syncIcon"></i></button>
+      <button class="header-btn" id="syncDataBtn" onclick="forceSyncNow()" title="Auto-sync is live — tap to force a full re-sync"><i class="fas fa-sync-alt" id="syncIcon"></i><span class="badge" id="syncLiveDot" style="background:var(--success);width:10px;height:10px;top:-1px;right:-1px"></span></button>
       <button class="header-btn" id="installPwaBtn" onclick="installPWAFromApp()" title="Install App" style="display:none"><i class="fas fa-download"></i></button>
       <button class="header-btn" onclick="showNotifications()"><i class="fas fa-bell"></i><span class="badge" id="notifBadge" style="display:none">0</span></button>
       <button class="header-btn" onclick="showProfile()"><i class="fas fa-user-circle"></i></button>
@@ -2918,6 +2921,12 @@ function silentRefreshCurrentPage(changedProp){
 
 var _heartbeatTimer=null,_lastSyncTime=0;
 
+function updateSyncStatusIndicator(){
+  var dot=$('syncLiveDot');var btn=$('syncDataBtn');if(!dot||!btn)return;
+  var live=navigator.onLine!==false&&(_realtimeUnsubs||[]).length>0;
+  if(live){dot.classList.remove('offline');btn.title='Auto-sync is live — updates from Admin/Teachers appear automatically. Tap to force a full re-sync.';}
+  else{dot.classList.add('offline');btn.title='Auto-sync reconnecting… tap to sync manually now.';}
+}
 function startSyncHeartbeat(){
   if(_heartbeatTimer)clearInterval(_heartbeatTimer);
   _heartbeatTimer=setInterval(function(){
@@ -2933,16 +2942,21 @@ function startSyncHeartbeat(){
     if(navigator.onLine!==false&&(_realtimeUnsubs||[]).length===0&&Date.now()-_lastSyncTime>30000){
       _lastSyncTime=Date.now();silentPullFromFirebase();
     }
+    updateSyncStatusIndicator();
   },30000);
   window.addEventListener('online',function(){
     if(DB.currentUser){setupRealtimeSubscription();silentPullFromFirebase();}
+    updateSyncStatusIndicator();
   });
+  window.addEventListener('offline',function(){updateSyncStatusIndicator();});
   document.addEventListener('visibilitychange',function(){
     if(!document.hidden&&DB.currentUser&&isFirebaseReady){
       if((_realtimeUnsubs||[]).length===0)setupRealtimeSubscription();
       if(Date.now()-_lastSyncTime>20000){_lastSyncTime=Date.now();silentPullFromFirebase();}
     }
+    updateSyncStatusIndicator();
   });
+  updateSyncStatusIndicator();
 }
 
 async function silentPullFromFirebase(){
@@ -3036,6 +3050,7 @@ function setupRealtimeSubscription(){/* debounced per-collection refresh */
     );
     _realtimeUnsubs.push(sUnsub);
   }catch(e){console.warn('settings onSnapshot fail',e);}
+  try{updateSyncStatusIndicator();}catch(e){}
   // realtime active
 }
 function cleanupRealtime(){
