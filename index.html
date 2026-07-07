@@ -3139,7 +3139,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.07.4';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.07.5';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -6729,7 +6729,7 @@ function computeLiveEmbedUrl(platform,link){
       var id='';var m=link.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];
       if(!id){m=link.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];}
       if(!id){m=link.match(/youtube\.com\/(?:live|embed|shorts)\/([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];}
-      if(id)return 'https://www.youtube.com/embed/'+id+'?autoplay=0&rel=0';
+      if(id)return 'https://www.youtube-nocookie.com/embed/'+id+'?autoplay=0&rel=0';
       return null;
     }
     if(platform==='Facebook'||/facebook\.com|fb\.watch/i.test(link)){
@@ -7264,7 +7264,7 @@ function renderLiveViewerCard(s){
     }else if(s.platform==='Device Camera'){
       html+='<div style="position:relative;padding-top:56.25%;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"><div id="agoraVideo_'+s.id+'" style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.6);font-size:0.75rem">Connecting…</div>'+overlay+'</div>';
     }else if(s.embedUrl){
-      html+='<div style="position:relative;padding-top:56.25%;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"><iframe src="'+esc(s.embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>'+overlay+'</div>';
+      html+='<div style="position:relative;padding-top:56.25%;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"><iframe src="'+esc(s.embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>'+overlay+'</div>';
     }
     if(status==='Live'&&s.platform!=='Device Camera')html+='<a href="'+esc(s.link)+'" target="_blank" class="oc-link" style="background:var(--danger);margin-top:10px"><i class="fas fa-external-link-alt"></i> Open in '+esc(s.platform||'app')+'</a>';
     if(status==='Live'){
@@ -7344,7 +7344,7 @@ function computeRecordingEmbedUrl(link){
       var id='';var m=link.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];
       if(!id){m=link.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];}
       if(!id){m=link.match(/youtube\.com\/(?:live|embed|shorts)\/([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];}
-      if(id)return'https://www.youtube.com/embed/'+id;
+      if(id)return'https://www.youtube-nocookie.com/embed/'+id;
       return null;
     }
     if(/facebook\.com|fb\.watch/i.test(link)){
@@ -7366,7 +7366,7 @@ function toggleRecordingPlayer(id){
   }else{
     var url=box.getAttribute('data-embed-url');
     box.style.paddingTop='56.25%';box.style.position='relative';
-    box.innerHTML='<iframe src="'+esc(url)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+    box.innerHTML='<iframe src="'+esc(url)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
     box.style.display='block';
   }
 }
