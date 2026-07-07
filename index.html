@@ -3139,7 +3139,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.07.6';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.07.7';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -7373,8 +7373,8 @@ function toggleRecordingPlayer(id){
 function renderClassRecordingCard(r,user){
   var canEdit=canEditRecording(r,user);
   var embedUrl=computeRecordingEmbedUrl(r.link);
-  var html='<div class="recording-card" style="flex-direction:column;align-items:stretch">';
-  html+='<div style="display:flex;align-items:center;gap:14px">';
+  var html='<div class="recording-card-wrap" style="margin-bottom:10px">';
+  html+='<div class="recording-card" style="margin-bottom:0">';
   html+='<div class="recording-icon"><i class="fas fa-play"></i></div>';
   html+='<div class="recording-info">';
   html+='<div class="rc-subject">'+esc(r.subject)+'</div>';
@@ -7389,7 +7389,7 @@ function renderClassRecordingCard(r,user){
     html+='<button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="confirmDeleteClassRecording(\''+r.id+'\')"><i class="fas fa-trash"></i></button>';
   }
   html+='</div></div>';
-  if(embedUrl)html+='<div id="recPlayer_'+r.id+'" data-embed-url="'+esc(embedUrl)+'" style="display:none;margin-top:12px;border-radius:8px;overflow:hidden;background:#000"></div>';
+  if(embedUrl)html+='<div id="recPlayer_'+r.id+'" data-embed-url="'+esc(embedUrl)+'" style="display:none;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"></div>';
   html+='</div>';
   return html;
 }
