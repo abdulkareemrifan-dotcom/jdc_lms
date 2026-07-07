@@ -3139,7 +3139,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.07.2';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.07.3';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -7335,9 +7335,42 @@ function renderClassRecordings(){
   var searchEl=$('crSearchInput');if(searchEl){var pos=searchEl.value.length;searchEl.focus();searchEl.setSelectionRange(pos,pos);}
 }
 function filterClassRecordings(query){_crSearchQuery=query;renderClassRecordings();}
+// General-purpose embed helper (YouTube, Facebook, Google Drive) reused by both
+// Live Broadcast recordings and the Class Recordings archive.
+function computeRecordingEmbedUrl(link){
+  if(!link)return null;
+  try{
+    if(/youtu\.?be/i.test(link)){
+      var id='';var m=link.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];
+      if(!id){m=link.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];}
+      if(!id){m=link.match(/youtube\.com\/(?:live|embed|shorts)\/([a-zA-Z0-9_-]{6,})/);if(m)id=m[1];}
+      if(id)return'https://www.youtube.com/embed/'+id;
+      return null;
+    }
+    if(/facebook\.com|fb\.watch/i.test(link)){
+      return'https://www.facebook.com/plugins/video.php?href='+encodeURIComponent(link)+'&show_text=0';
+    }
+    if(/drive\.google\.com/i.test(link)){
+      var dm=link.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if(dm)return'https://drive.google.com/file/d/'+dm[1]+'/preview';
+      return null;
+    }
+  }catch(e){}
+  return null;
+}
+function toggleRecordingPlayer(id){
+  var box=$('recPlayer_'+id);if(!box)return;
+  if(box.style.display==='none'||!box.style.display){
+    box.style.display='block';
+  }else{
+    box.style.display='none';box.innerHTML='';
+  }
+}
 function renderClassRecordingCard(r,user){
   var canEdit=canEditRecording(r,user);
-  var html='<div class="recording-card">';
+  var embedUrl=computeRecordingEmbedUrl(r.link);
+  var html='<div class="recording-card" style="flex-direction:column;align-items:stretch">';
+  html+='<div style="display:flex;align-items:center;gap:14px">';
   html+='<div class="recording-icon"><i class="fas fa-play"></i></div>';
   html+='<div class="recording-info">';
   html+='<div class="rc-subject">'+esc(r.subject)+'</div>';
@@ -7345,12 +7378,15 @@ function renderClassRecordingCard(r,user){
   if(r.notes)html+='<div class="rc-notes">'+esc(r.notes)+'</div>';
   html+='</div>';
   html+='<div class="recording-actions">';
-  html+='<a href="'+esc(r.link)+'" target="_blank" class="recording-watch-btn"><i class="fas fa-play-circle"></i> <span data-i18n="watchRecording"></span></a>';
+  if(embedUrl)html+='<button class="recording-watch-btn" style="border:none;cursor:pointer" onclick="toggleRecordingPlayer(\''+r.id+'\')"><i class="fas fa-play-circle"></i> <span data-i18n="watchRecording"></span></button>';
+  else html+='<a href="'+esc(r.link)+'" target="_blank" class="recording-watch-btn"><i class="fas fa-play-circle"></i> <span data-i18n="watchRecording"></span></a>';
   if(canEdit){
     html+='<button class="btn btn-icon btn-sm" style="background:var(--info);color:white" onclick="editClassRecording(\''+r.id+'\')"><i class="fas fa-edit"></i></button>';
     html+='<button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="confirmDeleteClassRecording(\''+r.id+'\')"><i class="fas fa-trash"></i></button>';
   }
   html+='</div></div>';
+  if(embedUrl)html+='<div id="recPlayer_'+r.id+'" style="display:none;margin-top:12px;position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden;background:#000"><iframe src="'+esc(embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
+  html+='</div>';
   return html;
 }
 function openClassRecordingModal(){
