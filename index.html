@@ -3139,7 +3139,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.07.3';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.07.4';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -7360,10 +7360,14 @@ function computeRecordingEmbedUrl(link){
 }
 function toggleRecordingPlayer(id){
   var box=$('recPlayer_'+id);if(!box)return;
-  if(box.style.display==='none'||!box.style.display){
-    box.style.display='block';
+  var isOpen=box.style.display==='block';
+  if(isOpen){
+    box.style.display='none';box.innerHTML='';box.style.paddingTop='';
   }else{
-    box.style.display='none';box.innerHTML='';
+    var url=box.getAttribute('data-embed-url');
+    box.style.paddingTop='56.25%';box.style.position='relative';
+    box.innerHTML='<iframe src="'+esc(url)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>';
+    box.style.display='block';
   }
 }
 function renderClassRecordingCard(r,user){
@@ -7385,7 +7389,7 @@ function renderClassRecordingCard(r,user){
     html+='<button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="confirmDeleteClassRecording(\''+r.id+'\')"><i class="fas fa-trash"></i></button>';
   }
   html+='</div></div>';
-  if(embedUrl)html+='<div id="recPlayer_'+r.id+'" style="display:none;margin-top:12px;position:relative;padding-top:56.25%;border-radius:8px;overflow:hidden;background:#000"><iframe src="'+esc(embedUrl)+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
+  if(embedUrl)html+='<div id="recPlayer_'+r.id+'" data-embed-url="'+esc(embedUrl)+'" style="display:none;margin-top:12px;border-radius:8px;overflow:hidden;background:#000"></div>';
   html+='</div>';
   return html;
 }
