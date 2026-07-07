@@ -3151,7 +3151,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.07.8';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.08.1';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -7287,12 +7287,16 @@ function renderLiveViewerCard(s){
     // it's on air. It does NOT get baked into the actual YouTube/Facebook stream pixels —
     // viewers watching directly on those platforms (outside this app) won't see it; for that,
     // add it as a browser/image source overlay in OBS on the broadcasting side.
-    var overlay='<div style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,rgba(0,0,0,0.75),rgba(0,0,0,0));padding:10px 12px 8px;display:flex;align-items:center;gap:8px;pointer-events:none">'
+    var hasTicker=!!(DB.settings&&DB.settings.tickerEnabled!==false&&(DB.settings.tickerText||'').trim());
+    var tickerTxt=(DB.settings&&DB.settings.tickerText)||'';
+    var tickerDur=Math.max(14,Math.round(tickerTxt.length*0.35));
+    var overlay='<div style="position:absolute;left:0;right:0;bottom:'+(hasTicker?'20px':'0')+';background:linear-gradient(0deg,rgba(0,0,0,0.75),rgba(0,0,0,0));padding:10px 12px 8px;display:flex;align-items:center;gap:8px;pointer-events:none">'
       +(s.showLogo!==false&&jdcLogoData()?'<img src="'+jdcLogoData()+'" style="width:26px;height:26px;object-fit:contain;background:white;border-radius:4px;padding:2px;flex-shrink:0">':'')
       +(s.speakerPhoto?'<img src="'+s.speakerPhoto+'" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0">':'')
       +'<div style="min-width:0"><div style="color:white;font-size:0.75rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.title)+'</div>'
       +'<div style="color:rgba(255,255,255,0.85);font-size:0.65rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.speaker||'')+(s.venue?' • '+esc(s.venue):'')+'</div></div>'
-      +'</div>';
+      +'</div>'
+      +(hasTicker?'<div style="position:absolute;left:0;right:0;bottom:0;height:20px;background:rgba(0,0,0,0.75);overflow:hidden;display:flex;align-items:center;white-space:nowrap;pointer-events:none"><div style="display:inline-block;white-space:nowrap;padding-left:100%;color:white;font-size:0.6rem;font-weight:600;animation:appTickerScroll '+tickerDur+'s linear infinite">'+esc(tickerTxt)+'<span style="margin:0 20px;opacity:0.5">•</span>'+esc(tickerTxt)+'</div></div>':'');
     if(status==='Paused'){
       html+='<div style="position:relative;padding-top:56.25%;margin-top:10px;border-radius:8px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center">';
       html+='<div style="position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:white;text-align:center;padding:16px">';
@@ -7319,8 +7323,17 @@ function renderLiveViewerCard(s){
     var reminded=user&&(s.remindUserIds||[]).indexOf(user.id)>=0;
     html+='<button class="btn btn-sm '+(reminded?'':'btn-outline')+'" style="margin-top:8px;'+(reminded?'background:var(--success);color:white':'')+'" onclick="toggleLsReminder(\''+s.id+'\')"><i class="fas '+(reminded?'fa-bell-slash':'fa-bell')+'"></i> '+(reminded?"You'll be notified":'Notify Me')+'</button>';
   }else{
-    if(s.recordingUrl)html+='<a href="'+esc(s.recordingUrl)+'" target="_blank" class="oc-link" style="background:var(--primary);margin-top:10px"><i class="fas fa-film"></i> Watch Recording</a>';
-    else html+='<div class="oc-meta" style="margin-top:8px;color:var(--text-light)"><i class="fas fa-check-circle"></i> This session has ended.</div>';
+    if(s.recordingUrl){
+      var recEmbed=computeRecordingEmbedUrl(s.recordingUrl);
+      if(recEmbed){
+        html+='<button class="oc-link" style="background:var(--primary);margin-top:10px;border:none;cursor:pointer" onclick="toggleRecordingPlayer(\'live_'+s.id+'\')"><i class="fas fa-film"></i> Watch Recording</button>';
+        html+='<div id="recPlayer_live_'+s.id+'" data-embed-url="'+esc(recEmbed)+'" style="display:none;margin-top:10px;border-radius:8px;overflow:hidden;background:#000"></div>';
+      }else{
+        html+='<a href="'+esc(s.recordingUrl)+'" target="_blank" class="oc-link" style="background:var(--primary);margin-top:10px"><i class="fas fa-film"></i> Watch Recording</a>';
+      }
+    }else{
+      html+='<div class="oc-meta" style="margin-top:8px;color:var(--text-light)"><i class="fas fa-check-circle"></i> This session has ended.</div>';
+    }
   }
   html+='</div>';
   return html;
