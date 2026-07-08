@@ -1253,7 +1253,18 @@ window.showDua=showDua;
 <div id="askQuestionModal" class="modal-overlay"><div class="modal-content">
   <div class="modal-header"><h3><i class="fas fa-question-circle"></i> <span data-i18n="askQuestion"></span></h3><button class="modal-close" onclick="closeModal('askQuestionModal')"><i class="fas fa-times"></i></button></div>
   <div class="modal-body">
-    <div class="form-group"><label class="form-label">Your Question <span class="req">*</span></label><textarea class="form-textarea" id="qaQuestionText" rows="4" placeholder="Type your question here..."></textarea></div>
+    <div class="form-group"><label class="form-label">How would you like to ask?</label><select class="form-select" id="qaQuestionMode" onchange="onQaModeChange('question',this.value)"><option value="Text">Type a question</option><option value="Voice">Record my voice (max 30s)</option><option value="Video">Record a video (max 30s)</option></select></div>
+    <div class="form-group" id="qaQuestionTextWrap"><label class="form-label">Your Question <span class="req">*</span></label><textarea class="form-textarea" id="qaQuestionText" rows="4" placeholder="Type your question here..."></textarea></div>
+    <div class="form-group" id="qaQuestionRecordWrap" style="display:none">
+      <video id="qaQuestionVideoPreview" style="width:100%;max-height:200px;border-radius:8px;background:#000;display:none" muted playsinline></video>
+      <video id="qaQuestionVideoPlayback" style="width:100%;max-height:200px;border-radius:8px;background:#000;display:none" controls playsinline></video>
+      <audio id="qaQuestionAudioPlayback" style="width:100%;display:none" controls></audio>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <button type="button" class="btn btn-sm" id="qaQuestionRecBtn" style="background:var(--danger);color:white" onclick="toggleQaRecording('question')"><i class="fas fa-circle"></i> Start Recording</button>
+        <span id="qaQuestionRecTimer" style="font-size:0.85rem;color:var(--text-light)">00:00</span>
+      </div>
+      <input type="hidden" id="qaQuestionMediaData">
+    </div>
   </div>
   <div class="modal-footer"><button class="btn btn-outline" onclick="clearForm('askQuestionModal')"><i class="fas fa-eraser"></i> <span data-i18n="clear"></span></button><button class="btn btn-outline" onclick="closeModal('askQuestionModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="submitQaQuestion()"><i class="fas fa-paper-plane"></i> <span data-i18n="submit"></span></button></div>
 </div></div>
@@ -1263,9 +1274,19 @@ window.showDua=showDua;
   <div class="modal-body">
     <input type="hidden" id="qaAnswerId" value="">
     <div class="form-group" id="qaQuestionPreview" style="background:var(--bg);border-radius:var(--radius-sm);padding:10px;font-size:0.85rem;font-style:italic"></div>
-    <div class="form-group"><label class="form-label">Answer Type</label><select class="form-select" id="qaAnswerType" onchange="onQaAnswerTypeChange(this.value)"><option value="Text">Text</option><option value="Video">Video Link</option><option value="Audio">Audio Link</option></select></div>
+    <div class="form-group"><label class="form-label">Answer Type</label><select class="form-select" id="qaAnswerType" onchange="onQaAnswerTypeChange(this.value)"><option value="Text">Text</option><option value="Video">Video Link</option><option value="Audio">Audio Link</option><option value="RecordVoice">Record Voice (max 30s)</option><option value="RecordVideo">Record Video (max 30s)</option></select></div>
     <div class="form-group" id="qaAnswerTextWrap"><label class="form-label">Answer</label><textarea class="form-textarea" id="qaAnswerText" rows="4" placeholder="Write your answer..."></textarea></div>
     <div class="form-group" id="qaAnswerLinkWrap" style="display:none"><label class="form-label">Link</label><input type="url" class="form-input" id="qaAnswerLink" placeholder="Paste the YouTube / Google Drive / other link"></div>
+    <div class="form-group" id="qaAnswerRecordWrap" style="display:none">
+      <video id="qaAnswerVideoPreview" style="width:100%;max-height:200px;border-radius:8px;background:#000;display:none" muted playsinline></video>
+      <video id="qaAnswerVideoPlayback" style="width:100%;max-height:200px;border-radius:8px;background:#000;display:none" controls playsinline></video>
+      <audio id="qaAnswerAudioPlayback" style="width:100%;display:none" controls></audio>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+        <button type="button" class="btn btn-sm" id="qaAnswerRecBtn" style="background:var(--danger);color:white" onclick="toggleQaRecording('answer')"><i class="fas fa-circle"></i> Start Recording</button>
+        <span id="qaAnswerRecTimer" style="font-size:0.85rem;color:var(--text-light)">00:00</span>
+      </div>
+      <input type="hidden" id="qaAnswerMediaData">
+    </div>
   </div>
   <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('answerQuestionModal')" data-i18n="cancel"></button><button class="btn btn-primary" onclick="submitQaAnswer()"><i class="fas fa-paper-plane"></i> Submit Answer</button></div>
 </div></div>
@@ -2831,6 +2852,8 @@ async function fbSet(col,record){
     if(clean.logoData&&clean.logoData.length>600000)clean.logoData='';
     if(clean.banner&&clean.banner.length>500000)clean.banner='';
     if(clean.speakerPhoto&&clean.speakerPhoto.length>300000)clean.speakerPhoto='';
+    if(clean.questionMediaData&&clean.questionMediaData.length>700000)clean.questionMediaData='';
+    if(clean.answerMediaData&&clean.answerMediaData.length>700000)clean.answerMediaData='';
     await window._firebase.setDoc(window._firebase.doc(col,clean.id),clean);
     window._lastFbSetError=null;
     return true;
@@ -2846,7 +2869,7 @@ async function fbDelete(col,id){if(!isFirebaseReady||!window._firebase||!id)retu
 
 async function fbGetAll(col){if(!isFirebaseReady||!window._firebase)return null;try{var snap=await window._firebase.getDocs(window._firebase.collection(col));var docs=[];snap.forEach(function(d){var data=d.data();data.id=d.id;docs.push(data);});return docs;}catch(e){console.error('fbGetAll',col,e);return null;}}
 
-async function fbSetAll(col,records){if(!isFirebaseReady||!window._firebase||!Array.isArray(records)||!records.length)return false;try{var chunks=[];for(var i=0;i<records.length;i+=400)chunks.push(records.slice(i,i+400));for(var ci=0;ci<chunks.length;ci++){var batch=window._firebase.writeBatch();chunks[ci].forEach(function(r){if(!r||!r.id)return;var c2=JSON.parse(JSON.stringify(r));if(c2.photo&&c2.photo.length>600000)c2.photo='';if(c2.logoData&&c2.logoData.length>600000)c2.logoData='';if(c2.banner&&c2.banner.length>500000)c2.banner='';if(c2.speakerPhoto&&c2.speakerPhoto.length>300000)c2.speakerPhoto='';batch.set(window._firebase.doc(col,r.id),c2);});await batch.commit();}return true;}catch(e){console.error('fbSetAll',col,e);return false;}}
+async function fbSetAll(col,records){if(!isFirebaseReady||!window._firebase||!Array.isArray(records)||!records.length)return false;try{var chunks=[];for(var i=0;i<records.length;i+=400)chunks.push(records.slice(i,i+400));for(var ci=0;ci<chunks.length;ci++){var batch=window._firebase.writeBatch();chunks[ci].forEach(function(r){if(!r||!r.id)return;var c2=JSON.parse(JSON.stringify(r));if(c2.photo&&c2.photo.length>600000)c2.photo='';if(c2.logoData&&c2.logoData.length>600000)c2.logoData='';if(c2.banner&&c2.banner.length>500000)c2.banner='';if(c2.speakerPhoto&&c2.speakerPhoto.length>300000)c2.speakerPhoto='';if(c2.questionMediaData&&c2.questionMediaData.length>700000)c2.questionMediaData='';if(c2.answerMediaData&&c2.answerMediaData.length>700000)c2.answerMediaData='';batch.set(window._firebase.doc(col,r.id),c2);});await batch.commit();}return true;}catch(e){console.error('fbSetAll',col,e);return false;}}
 
 async function fbSaveRecord(prop,record,successMsg,renderFn){
   var col=FB_COLLECTIONS[prop];
@@ -3185,7 +3208,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.08.5';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.08.6';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -7770,6 +7793,8 @@ function renderQaCard(q,user,isPending){
   html+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
   html+='<div><div class="oc-meta"><i class="fas fa-user"></i> '+esc(q.studentName||'Student')+' &nbsp;|&nbsp; <i class="fas fa-clock"></i> '+formatDateTime(q.createdAt)+'</div>';
   html+='<div style="margin-top:6px;font-size:0.9rem;font-weight:600">'+esc(q.question)+'</div>';
+  if(q.questionMode==='Video'&&q.questionMediaData)html+='<video controls style="width:100%;max-height:220px;border-radius:8px;background:#000;margin-top:8px" src="'+q.questionMediaData+'"></video>';
+  else if(q.questionMode==='Voice'&&q.questionMediaData)html+='<audio controls style="width:100%;margin-top:8px" src="'+q.questionMediaData+'"></audio>';
   html+='</div>';
   if(isPending)html+='<button class="btn btn-sm" style="background:var(--primary);color:white" onclick="openAnswerModal(\''+q.id+'\')"><i class="fas fa-reply"></i> Answer</button>';
   html+='</div>';
@@ -7778,6 +7803,10 @@ function renderQaCard(q,user,isPending){
     html+='<div class="oc-meta" style="margin-bottom:6px"><i class="fas fa-user-tie"></i> Answered by '+esc(q.answeredByName||qaScholarName())+' &nbsp;|&nbsp; '+formatDateTime(q.answeredAt)+'</div>';
     if(q.answerType==='Text'){
       html+='<div style="font-size:0.88rem;white-space:pre-wrap">'+esc(q.answerText||'')+'</div>';
+    }else if(q.answerType==='RecordVoice'&&q.answerMediaData){
+      html+='<audio controls style="width:100%;margin-top:6px" src="'+q.answerMediaData+'"></audio>';
+    }else if(q.answerType==='RecordVideo'&&q.answerMediaData){
+      html+='<video controls style="width:100%;max-height:260px;border-radius:8px;background:#000;margin-top:6px" src="'+q.answerMediaData+'"></video>';
     }else if(q.answerType==='Audio'){
       if(/\.(mp3|wav|ogg|m4a)(\?|$)/i.test(q.answerLink||'')){
         html+='<audio controls style="width:100%;margin-top:6px"><source src="'+esc(q.answerLink)+'"></audio>';
@@ -7796,33 +7825,114 @@ function renderQaCard(q,user,isPending){
   html+='</div>';
   return html;
 }
+// ---- Shared in-browser Voice/Video recording engine for Live Q&A ----
+// Used for both the student's question and the teacher's answer. Recordings are capped
+// at 30 seconds to keep the saved size safely under Firestore's document limit.
+var qaRec={question:null,answer:null};
+function onQaModeChange(prefix,val){
+  if(prefix==='question'){
+    $('qaQuestionTextWrap').style.display=val==='Text'?'block':'none';
+    $('qaQuestionRecordWrap').style.display=val==='Text'?'none':'block';
+    if(val!=='Text')resetQaRecordingUI('question',val);
+  }
+}
+function onQaAnswerTypeChange(val){
+  var isText=val==='Text';var isLink=(val==='Video'||val==='Audio');var isRecord=(val==='RecordVoice'||val==='RecordVideo');
+  $('qaAnswerTextWrap').style.display=isText?'block':'none';
+  $('qaAnswerLinkWrap').style.display=isLink?'block':'none';
+  $('qaAnswerRecordWrap').style.display=isRecord?'block':'none';
+  if(isLink){var lbl=$('qaAnswerLinkWrap').querySelector('.form-label');if(lbl)lbl.textContent=val==='Video'?'Video Link':'Audio Link';}
+  if(isRecord)resetQaRecordingUI('answer',val==='RecordVoice'?'Voice':'Video');
+}
+function resetQaRecordingUI(prefix,mode){
+  qaRec[prefix]={mode:mode,chunks:[],seconds:0,recorder:null,stream:null,timer:null};
+  $('qa'+(prefix==='question'?'Question':'Answer')+'MediaData').value='';
+  $('qa'+(prefix==='question'?'Question':'Answer')+'RecTimer').textContent='00:00';
+  var vPrev=$('qa'+(prefix==='question'?'Question':'Answer')+'VideoPreview');
+  var vPlay=$('qa'+(prefix==='question'?'Question':'Answer')+'VideoPlayback');
+  var aPlay=$('qa'+(prefix==='question'?'Question':'Answer')+'AudioPlayback');
+  vPrev.style.display='none';vPlay.style.display='none';aPlay.style.display='none';vPrev.srcObject=null;vPlay.src='';aPlay.src='';
+  var btn=$('qa'+(prefix==='question'?'Question':'Answer')+'RecBtn');
+  btn.innerHTML='<i class="fas fa-circle"></i> Start Recording';btn.style.background='var(--danger)';
+}
+function qaFmtTime(sec){var m=Math.floor(sec/60),s=sec%60;return(m<10?'0':'')+m+':'+(s<10?'0':'')+s}
+async function toggleQaRecording(prefix){
+  var idPart=prefix==='question'?'Question':'Answer';
+  var state=qaRec[prefix];if(!state){showToast('Pick Voice or Video first','error');return}
+  var btn=$('qa'+idPart+'RecBtn');
+  if(!state.recorder||state.recorder.state==='inactive'){
+    try{
+      var constraints=state.mode==='Video'?{video:true,audio:true}:{audio:true};
+      var stream=await navigator.mediaDevices.getUserMedia(constraints);
+      state.stream=stream;state.chunks=[];state.seconds=0;
+      if(state.mode==='Video'){
+        var vp=$('qa'+idPart+'VideoPreview');vp.srcObject=stream;vp.style.display='block';vp.play();
+        $('qa'+idPart+'VideoPlayback').style.display='none';
+      }else{
+        $('qa'+idPart+'AudioPlayback').style.display='none';
+      }
+      var recorder=new MediaRecorder(stream);
+      recorder.ondataavailable=function(e){if(e.data&&e.data.size>0)state.chunks.push(e.data)};
+      recorder.onstop=function(){
+        var blob=new Blob(state.chunks,{type:state.mode==='Video'?'video/webm':'audio/webm'});
+        var reader=new FileReader();
+        reader.onload=function(){
+          $('qa'+idPart+'MediaData').value=reader.result;
+          if(state.mode==='Video'){
+            $('qa'+idPart+'VideoPreview').style.display='none';
+            var vpb=$('qa'+idPart+'VideoPlayback');vpb.src=reader.result;vpb.style.display='block';
+          }else{
+            var apb=$('qa'+idPart+'AudioPlayback');apb.src=reader.result;apb.style.display='block';
+          }
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach(function(t){t.stop()});
+      };
+      recorder.start();state.recorder=recorder;
+      state.timer=setInterval(function(){
+        state.seconds++;
+        $('qa'+idPart+'RecTimer').textContent=qaFmtTime(state.seconds);
+        if(state.seconds>=30){toggleQaRecording(prefix);showToast('Max 30 seconds reached — recording stopped','warning');}
+      },1000);
+      btn.innerHTML='<i class="fas fa-stop"></i> Stop Recording';btn.style.background='var(--text)';
+    }catch(err){
+      showToast('Could not access camera/microphone: '+(err&&err.message||err),'error');
+    }
+  }else{
+    state.recorder.stop();
+    if(state.timer)clearInterval(state.timer);
+    btn.innerHTML='<i class="fas fa-redo"></i> Record Again';btn.style.background='var(--danger)';
+  }
+}
 function openAskQuestionModal(){
   $('qaQuestionText').value='';
+  $('qaQuestionMode').value='Text';
+  $('qaQuestionTextWrap').style.display='block';$('qaQuestionRecordWrap').style.display='none';
+  qaRec.question=null;
   clearDraft('askQuestionModal');
   openModal('askQuestionModal');
 }
 function submitQaQuestion(){
   var user=DB.currentUser;if(!user)return;
+  var mode=$('qaQuestionMode').value;
   var question=$('qaQuestionText').value.trim();
-  if(!question){showToast(t('fillRequired'),'error');return}
-  var data={id:generateId('QA'),studentId:user.id,studentName:user.name,question:question,status:'Pending',createdAt:new Date().toISOString()};
+  var mediaData=$('qaQuestionMediaData').value;
+  if(mode==='Text'&&!question){showToast(t('fillRequired'),'error');return}
+  if(mode!=='Text'&&!mediaData){showToast('Please record your question first','error');return}
+  var data={id:generateId('QA'),studentId:user.id,studentName:user.name,question:question||('Asked by '+(mode==='Voice'?'voice':'video')+' recording'),
+    questionMode:mode,questionMediaData:mode!=='Text'?mediaData:'',status:'Pending',createdAt:new Date().toISOString()};
   addAudit('QA_ASK','Question asked by '+user.name);
   closeModal('askQuestionModal');
   fbSaveRecord('qaQuestions',data,'Question submitted ✅',renderLiveQA);
   var answerers=(DB.users||[]).filter(function(u){return u.role==='Admin'||u.role==='Teacher'}).map(function(u){return u.id});
   if(answerers.length)pushNotification('New question asked',user.name+' asked a question in Live Q&A','liveQA','liveQA',answerers);
 }
-function onQaAnswerTypeChange(val){
-  $('qaAnswerTextWrap').style.display=val==='Text'?'block':'none';
-  $('qaAnswerLinkWrap').style.display=val==='Text'?'none':'block';
-  var lbl=$('qaAnswerLinkWrap').querySelector('.form-label');
-  if(lbl)lbl.textContent=val==='Video'?'Video Link':'Audio Link';
-}
 function openAnswerModal(id){
   var q=(DB.qaQuestions||[]).find(function(x){return x.id===id});if(!q)return;
   $('qaAnswerId').value=q.id;
   $('qaQuestionPreview').innerHTML='<i class="fas fa-user"></i> '+esc(q.studentName||'Student')+': "'+esc(q.question)+'"';
   $('qaAnswerType').value='Text';$('qaAnswerText').value='';$('qaAnswerLink').value='';
+  qaRec.answer=null;
   onQaAnswerTypeChange('Text');
   openModal('answerQuestionModal');
 }
@@ -7833,9 +7943,11 @@ function submitQaAnswer(){
   var type=$('qaAnswerType').value;
   var text=$('qaAnswerText').value.trim();
   var link=$('qaAnswerLink').value.trim();
+  var mediaData=$('qaAnswerMediaData').value;
   if(type==='Text'&&!text){showToast(t('fillRequired'),'error');return}
-  if(type!=='Text'&&!link){showToast(t('fillRequired'),'error');return}
-  q.status='Answered';q.answerType=type;q.answerText=text;q.answerLink=link;
+  if((type==='Video'||type==='Audio')&&!link){showToast(t('fillRequired'),'error');return}
+  if((type==='RecordVoice'||type==='RecordVideo')&&!mediaData){showToast('Please record your answer first','error');return}
+  q.status='Answered';q.answerType=type;q.answerText=text;q.answerLink=link;q.answerMediaData=(type==='RecordVoice'||type==='RecordVideo')?mediaData:'';
   q.answeredBy=user.id;q.answeredByName=user.name;q.answeredAt=new Date().toISOString();
   addAudit('QA_ANSWER','Answered question from '+(q.studentName||''));
   closeModal('answerQuestionModal');
