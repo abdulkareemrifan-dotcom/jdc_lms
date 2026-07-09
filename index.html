@@ -3214,7 +3214,7 @@ function cleanupRealtime(){
 function processFirebaseData(data){return data||[]}
 async function loadDB(){try{var s=localStorage.getItem(DB_KEY);if(s){var p=JSON.parse(s);Object.keys(DB_DEFAULT).forEach(function(k){if(!(k in p))p[k]=DB_DEFAULT[k]});return p}}catch(e){console.error("DB load error:",e)}return JSON.parse(JSON.stringify(DB_DEFAULT))}
 var DB_VERSION=4;
-var APP_VERSION='2026.07.08.9';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
+var APP_VERSION='2026.07.09.1';async function initDatabase(){var savedVer=parseInt(localStorage.getItem('jdc_db_version')||'0');if(savedVer>0&&savedVer<DB_VERSION){localStorage.removeItem('jdc_db_key');localStorage.setItem('jdc_db_version',String(DB_VERSION))}else if(savedVer===0){localStorage.setItem('jdc_db_version',String(DB_VERSION))}
 // Load local first for fast startup
 var local=await loadDB();if(local&&local.users&&local.users.length>0){Object.keys(local).forEach(function(k){if(k!=="currentUser")DB[k]=local[k]})}
 // Then load from Firebase (async, non-blocking for UI)
@@ -7811,13 +7811,11 @@ function renderLiveQA(){
   var html='<div style="margin-top:38px"><div class="section-header"><h3><i class="fas fa-question-circle" style="color:var(--primary)"></i> Live Q&amp;A with '+esc(qaScholarName())+'</h3>';
   html+='<button class="btn btn-primary btn-sm" onclick="openAskQuestionModal()"><i class="fas fa-plus"></i> <span data-i18n="askQuestion"></span></button>';
   html+='</div></div>';
-  if(canAnswer){
-    html+='<div class="qa-section-label">Pending Questions ('+pending.length+')</div>';
-    if(pending.length===0){
-      html+='<div class="card"><div class="card-body" style="text-align:center;padding:20px;color:var(--text-light);font-size:0.85rem">No pending questions.</div></div>';
-    }else{
-      pending.forEach(function(q){html+=renderQaCard(q,user,true)});
-    }
+  html+='<div class="qa-section-label">Pending Questions ('+pending.length+')</div>';
+  if(pending.length===0){
+    html+='<div class="card"><div class="card-body" style="text-align:center;padding:20px;color:var(--text-light);font-size:0.85rem">No pending questions.</div></div>';
+  }else{
+    pending.forEach(function(q){html+=renderQaCard(q,user,true)});
   }
   html+='<div class="qa-section-label">Answered</div>';
   if(answered.length===0){
@@ -7829,6 +7827,7 @@ function renderLiveQA(){
   applyTranslations();
 }
 function renderQaCard(q,user,isPending){
+  var isAdmin=user.role==='Admin';
   var html='<div class="online-class-card" style="margin-bottom:10px'+(isPending?';border-left-color:var(--warning)':'')+'">';
   html+='<div style="display:flex;justify-content:space-between;align-items:flex-start">';
   html+='<div><div class="oc-meta"><i class="fas fa-user"></i> '+esc(q.studentName||'Student')+' &nbsp;|&nbsp; <i class="fas fa-clock"></i> '+formatDateTime(q.createdAt)+'</div>';
@@ -7836,7 +7835,14 @@ function renderQaCard(q,user,isPending){
   if(q.questionMode==='Video'&&q.questionMediaData)html+='<video controls style="width:100%;max-height:220px;border-radius:8px;background:#000;margin-top:8px" src="'+q.questionMediaData+'"></video>';
   else if(q.questionMode==='Voice'&&q.questionMediaData)html+='<audio controls style="width:100%;margin-top:8px" src="'+q.questionMediaData+'"></audio>';
   html+='</div>';
-  if(isPending)html+='<button class="btn btn-sm" style="background:var(--primary);color:white" onclick="openAnswerModal(\''+q.id+'\')"><i class="fas fa-reply"></i> Answer</button>';
+  html+='<div style="display:flex;gap:4px;flex-shrink:0">';
+  if(isPending&&canAnswerQuestions(user))html+='<button class="btn btn-sm" style="background:var(--primary);color:white" onclick="openAnswerModal(\''+q.id+'\')"><i class="fas fa-reply"></i> Answer</button>';
+  if(isAdmin){
+    html+='<button class="btn btn-icon btn-sm" style="background:var(--info);color:white" onclick="editQaQuestionText(\''+q.id+'\')" title="Edit question"><i class="fas fa-edit"></i></button>';
+    if(!isPending)html+='<button class="btn btn-icon btn-sm" style="background:var(--primary);color:white" onclick="openAnswerModal(\''+q.id+'\')" title="Edit answer"><i class="fas fa-reply-all"></i></button>';
+    html+='<button class="btn btn-icon btn-sm" style="background:var(--danger);color:white" onclick="confirmDeleteQaQuestion(\''+q.id+'\')" title="Delete"><i class="fas fa-trash"></i></button>';
+  }
+  html+='</div>';
   html+='</div>';
   if(!isPending&&q.status==='Answered'){
     html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">';
@@ -7964,17 +7970,43 @@ function submitQaQuestion(){
   addAudit('QA_ASK','Question asked by '+user.name);
   closeModal('askQuestionModal');
   fbSaveRecord('qaQuestions',data,'Question submitted ✅',renderLiveQA);
-  var answerers=(DB.users||[]).filter(function(u){return u.role==='Admin'||u.role==='Teacher'}).map(function(u){return u.id});
-  if(answerers.length)pushNotification('New question asked',user.name+' asked a question in Live Q&A','liveQA','liveQA',answerers);
 }
 function openAnswerModal(id){
   var q=(DB.qaQuestions||[]).find(function(x){return x.id===id});if(!q)return;
   $('qaAnswerId').value=q.id;
   $('qaQuestionPreview').innerHTML='<i class="fas fa-user"></i> '+esc(q.studentName||'Student')+': "'+esc(q.question)+'"';
-  $('qaAnswerType').value='Text';$('qaAnswerText').value='';$('qaAnswerLink').value='';
   qaRec.answer=null;
-  onQaAnswerTypeChange('Text');
+  if(q.status==='Answered'){
+    // Editing an existing answer — pre-fill with whatever's already there
+    $('qaAnswerType').value=q.answerType||'Text';
+    $('qaAnswerText').value=q.answerText||'';
+    $('qaAnswerLink').value=q.answerLink||'';
+    onQaAnswerTypeChange(q.answerType||'Text');
+    if((q.answerType==='RecordVoice'||q.answerType==='RecordVideo')&&q.answerMediaData){
+      $('qaAnswerMediaData').value=q.answerMediaData;
+      if(q.answerType==='RecordVideo'){var vpb=$('qaAnswerVideoPlayback');vpb.src=q.answerMediaData;vpb.style.display='block';}
+      else{var apb=$('qaAnswerAudioPlayback');apb.src=q.answerMediaData;apb.style.display='block';}
+    }
+  }else{
+    $('qaAnswerType').value='Text';$('qaAnswerText').value='';$('qaAnswerLink').value='';
+    onQaAnswerTypeChange('Text');
+  }
   openModal('answerQuestionModal');
+}
+function editQaQuestionText(id){
+  var q=(DB.qaQuestions||[]).find(function(x){return x.id===id});if(!q)return;
+  var updated=prompt('Edit question text:',q.question);
+  if(updated===null)return; // cancelled
+  updated=updated.trim();
+  if(!updated){showToast('Question text cannot be empty.','error');return}
+  q.question=updated;
+  addAudit('QA_EDIT','Admin edited question: '+q.id);
+  fbSaveRecord('qaQuestions',q,'Question updated ✅',renderLiveQA);
+}
+function confirmDeleteQaQuestion(id){
+  $('deleteConfirmText').textContent=t('areYouSure');
+  $('deleteConfirmBtn').onclick=function(){closeModal('deleteModal');fbDeleteRecord('qaQuestions',id,'Question deleted ✅',renderLiveQA)};
+  openModal('deleteModal');
 }
 function submitQaAnswer(){
   var user=DB.currentUser;if(!user)return;
@@ -7992,7 +8024,6 @@ function submitQaAnswer(){
   addAudit('QA_ANSWER','Answered question from '+(q.studentName||''));
   closeModal('answerQuestionModal');
   fbSaveRecord('qaQuestions',q,'Answer submitted ✅',renderLiveQA);
-  if(q.studentId)pushNotification('Your question was answered','"'+q.question+'" now has an answer','liveQA','liveQA',[q.studentId]);
 }
 
 // ===================== TAWAF & SA'EE COUNTER =====================
